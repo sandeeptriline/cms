@@ -1,0 +1,212 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model extensions {
+  id               String   @id @db.Char(36)
+  name             String   @unique(map: "uk_extensions_name") @db.VarChar(255)
+  enabled          Boolean  @default(true)
+  bundle           String?  @db.VarChar(64)
+  version          String?  @db.VarChar(20)
+  extension_schema Json?
+  meta             Json?
+  created_at       DateTime @default(now()) @db.Timestamp(0)
+  updated_at       DateTime @default(now()) @db.Timestamp(0)
+}
+
+model library_items {
+  id                 String             @id @db.Char(36)
+  type               library_items_type
+  schema_template_id String             @db.Char(36)
+  name               String             @db.VarChar(100)
+  slug               String             @db.VarChar(100)
+  category           String?            @db.VarChar(50)
+  description        String?            @db.Text
+  preview_image      String?            @db.Char(36)
+  default_structure  Json?
+  tags               Json?
+  is_premium         Boolean            @default(false)
+  created_at         DateTime           @default(now()) @db.Timestamp(0)
+  updated_at         DateTime           @default(now()) @db.Timestamp(0)
+
+  @@unique([type, slug], map: "uk_library_items_type_slug")
+  @@index([category], map: "idx_library_items_category")
+  @@index([schema_template_id], map: "idx_library_items_template")
+  @@index([type], map: "idx_library_items_type")
+}
+
+model migrations {
+  version   String    @id @db.VarChar(255)
+  name      String    @db.VarChar(255)
+  timestamp DateTime? @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model platform_search_index {
+  id         String   @id @db.Char(36)
+  tenant_id  String   @db.Char(36)
+  project_id String?  @db.Char(36)
+  collection String   @db.VarChar(64)
+  item_id    String   @db.VarChar(255)
+  title      String?  @db.VarChar(255)
+  content    String?  @db.Text
+  metadata   Json?
+  indexed_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @default(now()) @db.Timestamp(0)
+  tenants    tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_search_tenant")
+
+  // Note: Fulltext index ft_search_content exists in database but cannot be defined in Prisma schema
+  @@index([collection], map: "idx_search_collection")
+  @@index([project_id], map: "idx_search_project")
+  @@index([tenant_id], map: "idx_search_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model schema_templates {
+  id         String                    @id @db.Char(36)
+  name       String                    @db.VarChar(100)
+  collection String                    @unique(map: "collection") @db.VarChar(100)
+  category   schema_templates_category
+  icon       String?                   @db.VarChar(50)
+  schema_def Json
+  is_system  Boolean                   @default(false)
+  created_at DateTime                  @default(now()) @db.Timestamp(0)
+  updated_at DateTime                  @default(now()) @db.Timestamp(0)
+
+  @@index([category], map: "idx_schema_templates_category")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tenant_usage {
+  id         String   @id @db.Char(36)
+  tenant_id  String   @db.Char(36)
+  metric     String   @db.VarChar(50)
+  value      BigInt
+  date       DateTime @db.Date
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  tenants    tenants  @relation(fields: [tenant_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tenant_usage_tenant")
+
+  @@unique([tenant_id, metric, date], map: "uk_tenant_usage")
+  @@index([date], map: "idx_tenant_usage_date")
+  @@index([tenant_id], map: "idx_tenant_usage_tenant")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model tenants {
+  id                    String                  @id @db.Char(36)
+  parent_id             String?                 @db.Char(36)
+  name                  String                  @db.VarChar(255)
+  slug                  String                  @unique(map: "slug") @db.VarChar(100)
+  db_name               String                  @unique(map: "db_name") @db.VarChar(100)
+  db_host               String?                 @db.VarChar(255)
+  db_connection         String?                 @db.VarChar(500)
+  status                tenants_status          @default(provisioning)
+  config                Json?
+  feature_flags         Json?
+  usage_limits          Json?
+  storage_used          BigInt?                 @default(0)
+  storage_limit         BigInt?
+  api_calls_today       Int?                    @default(0)
+  api_calls_limit       Int?
+  users_count           Int?                    @default(0)
+  users_limit           Int?
+  last_activity_at      DateTime?               @db.Timestamp(0)
+  provisioned_at        DateTime?               @db.Timestamp(0)
+  created_at            DateTime                @default(now()) @db.Timestamp(0)
+  updated_at            DateTime                @default(now()) @db.Timestamp(0)
+  platform_search_index platform_search_index[]
+  tenant_usage          tenant_usage[]
+  tenants               tenants?                @relation("tenantsTotenants", fields: [parent_id], references: [id], onUpdate: NoAction, map: "fk_tenants_parent")
+  other_tenants         tenants[]               @relation("tenantsTotenants")
+
+  @@index([last_activity_at], map: "idx_tenants_activity")
+  @@index([parent_id], map: "idx_tenants_parent")
+  @@index([status], map: "idx_tenants_status")
+}
+
+model theme_library_bundles {
+  id              String   @id @db.Char(36)
+  theme_id        String   @db.Char(36)
+  library_item_id String   @db.Char(36)
+  sort_order      Int      @default(0)
+  created_at      DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([library_item_id], map: "idx_tlb_item")
+  @@index([theme_id], map: "idx_tlb_theme")
+}
+
+model theme_schema_bundles {
+  id                 String   @id @db.Char(36)
+  theme_id           String   @db.Char(36)
+  schema_template_id String   @db.Char(36)
+  sort_order         Int      @default(0)
+  created_at         DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([schema_template_id], map: "idx_tsb_template")
+  @@index([theme_id], map: "idx_tsb_theme")
+}
+
+model themes {
+  id                 String   @id @db.Char(36)
+  parent_id          String?  @db.Char(36)
+  name               String   @db.VarChar(100)
+  slug               String   @unique(map: "slug") @db.VarChar(100)
+  version            String?  @db.VarChar(20)
+  design_tokens      Json?
+  component_variants Json?
+  presets            Json?
+  is_system          Boolean  @default(false)
+  template_json      Json?
+  preview_url        String?  @db.VarChar(500)
+  preview_image      String?  @db.Char(36)
+  author             String?  @db.VarChar(255)
+  license            String?  @default("MIT") @db.VarChar(100)
+  tags               Json?
+  downloads          Int?     @default(0)
+  rating             Decimal? @db.Decimal(3, 2)
+  created_at         DateTime @default(now()) @db.Timestamp(0)
+  updated_at         DateTime @default(now()) @db.Timestamp(0)
+
+  @@index([parent_id], map: "idx_themes_parent")
+}
+
+model translations {
+  id       String @id @db.Char(36)
+  key      String @db.VarChar(255)
+  language String @db.VarChar(10)
+  value    String @db.Text
+
+  @@unique([key, language], map: "uk_translations_key_lang")
+  @@index([language], map: "idx_translations_lang")
+}
+
+enum library_items_type {
+  page
+  component
+  menu
+  section
+  block
+}
+
+enum schema_templates_category {
+  page
+  layout
+  navigation
+  block
+  form
+  blog
+  settings
+  system
+}
+
+enum tenants_status {
+  provisioning
+  active
+  suspended
+  deleted
+}
