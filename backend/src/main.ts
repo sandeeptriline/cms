@@ -43,6 +43,7 @@ async function bootstrap() {
     .setDescription('Multi-tenant Headless CMS Platform API Documentation')
     .setVersion('1.0')
     .addTag('tenants', 'Tenant management operations')
+    .addTag('auth', 'Authentication and authorization endpoints')
     .addTag('health', 'Health check endpoints')
     .addBearerAuth(
       {

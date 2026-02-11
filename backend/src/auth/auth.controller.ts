@@ -22,6 +22,11 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import {
+  AuthResponseDto,
+  UserMeResponseDto,
+  LogoutResponseDto,
+} from './dto/auth-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -36,10 +41,48 @@ export class AuthController {
   @UseGuards(TenantGuard) // Require tenant context
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Register a new user' })
-  @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'User registered successfully' })
-  @ApiResponse({ status: 400, description: 'Validation error or user already exists' })
+  @ApiOperation({
+    summary: 'Register a new user',
+    description: 'Creates a new user account in the specified tenant. Returns JWT tokens for immediate authentication.',
+  })
+  @ApiBody({
+    type: RegisterDto,
+    description: 'User registration data',
+    examples: {
+      basic: {
+        summary: 'Basic registration',
+        value: {
+          email: 'user@example.com',
+          password: 'SecurePassword123!',
+          name: 'John Doe',
+        },
+      },
+      minimal: {
+        summary: 'Minimal registration (name optional)',
+        value: {
+          email: 'user@example.com',
+          password: 'SecurePassword123!',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'User registered successfully',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error or user already exists',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: { type: 'string', example: 'User with this email already exists' },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
   @ApiSecurity('tenant-id')
   @ApiSecurity('tenant-slug')
   async register(
@@ -64,10 +107,40 @@ export class AuthController {
   @UseGuards(TenantGuard) // Require tenant context
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'User login' })
-  @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Login successful' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  @ApiOperation({
+    summary: 'User login',
+    description: 'Authenticate user with email and password. Returns JWT access and refresh tokens.',
+  })
+  @ApiBody({
+    type: LoginDto,
+    description: 'User login credentials',
+    examples: {
+      login: {
+        summary: 'User login',
+        value: {
+          email: 'user@example.com',
+          password: 'SecurePassword123!',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Invalid credentials' },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
   @ApiSecurity('tenant-id')
   @ApiSecurity('tenant-slug')
   async login(
@@ -92,10 +165,39 @@ export class AuthController {
   @UseGuards(TenantGuard) // Require tenant context
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token' })
-  @ApiBody({ type: RefreshTokenDto })
-  @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
-  @ApiResponse({ status: 401, description: 'Invalid refresh token' })
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description: 'Generate new access and refresh tokens using a valid refresh token.',
+  })
+  @ApiBody({
+    type: RefreshTokenDto,
+    description: 'Refresh token',
+    examples: {
+      refresh: {
+        summary: 'Refresh token',
+        value: {
+          refreshToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid refresh token',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Invalid refresh token' },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
   @ApiSecurity('tenant-id')
   @ApiSecurity('tenant-slug')
   async refresh(
@@ -121,10 +223,27 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  @ApiOperation({ summary: 'Get current user' })
+  @ApiOperation({
+    summary: 'Get current user',
+    description: 'Returns the authenticated user\'s information based on the JWT token.',
+  })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Current user information' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current user information',
+    type: UserMeResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - Invalid or missing token',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
   async getMe(@CurrentUser() user: CurrentUserPayload) {
     return {
       id: user.userId,
@@ -137,9 +256,27 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'User logout' })
+  @ApiOperation({
+    summary: 'User logout',
+    description: 'Logs out the user and clears authentication cookies.',
+  })
   @ApiBearerAuth('JWT-auth')
-  @ApiResponse({ status: 200, description: 'Logout successful' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logout successful',
+    type: LogoutResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
   async logout(@Res({ passthrough: true }) response: Response) {
     // Clear HTTP-only cookies
     response.clearCookie('access_token');

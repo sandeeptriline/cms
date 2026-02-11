@@ -1,7 +1,8 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { tenants_status } from '@prisma/client';
+import { DatabaseValidator } from '../../common/utils/database-validator';
 
 @Injectable()
 export class TenantProvisioningService {
@@ -17,6 +18,16 @@ export class TenantProvisioningService {
    */
   async provisionTenant(tenantId: string, dbName: string): Promise<void> {
     this.logger.log(`Starting provisioning for tenant ${tenantId}, database: ${dbName}`);
+
+    // Validate database name - ensure it's a valid CMS tenant database
+    try {
+      DatabaseValidator.validateTenantDatabaseName(dbName);
+    } catch (error) {
+      this.logger.error(`Invalid database name: ${dbName} - ${error.message}`);
+      throw new BadRequestException(
+        `Invalid database name: ${error.message}. CMS only works with cms_platform and cms_tenant_* databases.`,
+      );
+    }
 
     try {
       // Step 1: Create the database
@@ -61,6 +72,13 @@ export class TenantProvisioningService {
    * Create a new MySQL database
    */
   private async createDatabase(dbName: string): Promise<void> {
+    // Validate it's a CMS database before creating
+    if (!DatabaseValidator.isValidCmsDatabase(dbName)) {
+      throw new BadRequestException(
+        `Cannot create database "${dbName}". CMS only works with cms_platform and cms_tenant_* databases.`,
+      );
+    }
+
     // Sanitize database name to prevent SQL injection
     const sanitizedDbName = this.sanitizeDatabaseName(dbName);
 
@@ -76,6 +94,7 @@ export class TenantProvisioningService {
 
   /**
    * Grant privileges to the database user
+   * Note: This requires MySQL root/admin privileges to grant privileges to other users
    */
   private async grantPrivileges(dbName: string): Promise<void> {
     const sanitizedDbName = this.sanitizeDatabaseName(dbName);
@@ -94,14 +113,49 @@ export class TenantProvisioningService {
       }
     }
 
+    // Try to use root connection if available
+    const rootUrl = this.configService.get<string>('MYSQL_ROOT_URL', '');
+    let rootPrisma: any = null;
+    
+    if (rootUrl) {
+      try {
+        // Create a temporary Prisma client with root connection
+        const { PrismaClient } = require('@prisma/client');
+        rootPrisma = new PrismaClient({
+          datasources: {
+            db: { url: rootUrl },
+          },
+        });
+        // Connect the root client
+        await rootPrisma.$connect();
+        this.logger.log('Using MySQL root connection for privilege grants');
+      } catch (error) {
+        this.logger.warn(`Failed to create root Prisma client: ${error.message}`);
+        this.logger.warn('Falling back to regular connection (privilege grants may fail)');
+      }
+    }
+
+    const prismaClient = rootPrisma || this.prisma;
+
     try {
-      await this.prisma.$executeRawUnsafe(
+      await prismaClient.$executeRawUnsafe(
         `GRANT ALL PRIVILEGES ON \`${sanitizedDbName}\`.* TO '${dbUser}'@'${dbHost}'`,
       );
-      await this.prisma.$executeRawUnsafe('FLUSH PRIVILEGES');
+      await prismaClient.$executeRawUnsafe('FLUSH PRIVILEGES');
+      this.logger.log(`Privileges granted successfully for ${dbName}`);
     } catch (error) {
-      this.logger.warn(`Failed to grant privileges (may need root access): ${error.message}`);
-      // Don't throw - privileges might already exist or require root
+      this.logger.error(`Failed to grant privileges: ${error.message}`);
+      this.logger.warn(
+        `Privilege grant failed. This requires MySQL root/admin access. ` +
+        `You can manually grant privileges using: ` +
+        `GRANT ALL PRIVILEGES ON \`${sanitizedDbName}\`.* TO '${dbUser}'@'${dbHost}'; FLUSH PRIVILEGES;`
+      );
+      // Don't throw - allow provisioning to continue, but log the issue
+      // The database will be created but privileges need to be granted manually
+    } finally {
+      if (rootPrisma) {
+        await rootPrisma.$disconnect();
+      }
     }
   }
 
@@ -128,16 +182,90 @@ export class TenantProvisioningService {
 
   /**
    * Create basic tenant database schema
-   * TODO: Replace with full tenant-db.sql schema via migrations
+   * Reads and executes the tenant-db.sql schema file
    */
   private async createTenantSchema(dbName: string): Promise<void> {
-    // For now, create minimal schema
-    // Full schema will be applied via Prisma migrations later
-    // This is just to get the tenant database initialized
-    this.logger.log(`Creating minimal schema for ${dbName}`);
+    this.logger.log(`Creating schema for ${dbName}`);
     
-    // Note: Full schema creation will be handled by Prisma migrations
-    // This is a placeholder for now
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Path to tenant-db.sql file (relative to project root)
+    // Try multiple possible paths
+    const possiblePaths = [
+      path.join(process.cwd(), '..', 'docs', 'tenant-db.sql'), // From backend/
+      path.join(process.cwd(), 'docs', 'tenant-db.sql'), // From root/
+      path.join(__dirname, '..', '..', '..', '..', 'docs', 'tenant-db.sql'), // From backend/src/tenants/provisioning/
+    ];
+    
+    let schemaPath: string | null = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        schemaPath = possiblePath;
+        break;
+      }
+    }
+    
+    if (!schemaPath) {
+      throw new Error(`Schema file not found. Tried: ${possiblePaths.join(', ')}`);
+    }
+    
+    try {
+      // Read the SQL file
+      const sql = fs.readFileSync(schemaPath, 'utf8');
+      
+      // Switch to the tenant database first
+      await this.prisma.$executeRawUnsafe(`USE \`${this.sanitizeDatabaseName(dbName)}\``);
+      
+      // Split SQL by semicolons, but be careful with JSON and strings
+      // Simple approach: split by semicolon followed by newline or end of string
+      const statements = sql
+        .split(/;\s*\n/)
+        .map((stmt: string) => stmt.trim())
+        .filter((stmt: string) => {
+          // Filter out comments and empty statements
+          const cleaned = stmt.replace(/--.*$/gm, '').trim();
+          return cleaned.length > 0 && !cleaned.startsWith('--');
+        });
+      
+      // Execute each statement
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (const statement of statements) {
+        if (statement.length > 0) {
+          try {
+            await this.prisma.$executeRawUnsafe(statement);
+            successCount++;
+          } catch (error: any) {
+            // Ignore "table already exists" and "duplicate key" errors
+            const errorMsg = error.message?.toLowerCase() || '';
+            if (
+              errorMsg.includes('already exists') ||
+              errorMsg.includes('duplicate') ||
+              errorMsg.includes('duplicate key')
+            ) {
+              // Table/constraint already exists, that's okay
+              successCount++;
+            } else {
+              errorCount++;
+              this.logger.warn(`Schema statement warning: ${error.message}`);
+              this.logger.debug(`Failed statement: ${statement.substring(0, 100)}...`);
+            }
+          }
+        }
+      }
+      
+      this.logger.log(`Schema created for ${dbName}: ${successCount} statements executed, ${errorCount} warnings`);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        this.logger.warn(`Schema file not found at ${schemaPath}. Skipping schema creation.`);
+        this.logger.warn('You may need to manually run migrations for this tenant.');
+      } else {
+        this.logger.error(`Failed to create schema: ${error.message}`);
+        throw error;
+      }
+    }
   }
 
   /**

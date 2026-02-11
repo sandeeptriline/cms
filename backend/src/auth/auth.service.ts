@@ -71,7 +71,10 @@ export class AuthService {
     }
 
     // Hash password
-    const saltRounds = this.configService.get<number>('BCRYPT_ROUNDS', 10);
+    const saltRounds = parseInt(
+      this.configService.get<string>('BCRYPT_ROUNDS', '10'),
+      10,
+    ) || 10;
     const passwordHash = await bcrypt.hash(registerDto.password, saltRounds);
 
     // Create user in tenant database

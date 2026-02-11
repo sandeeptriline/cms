@@ -41,15 +41,19 @@ export class TenantGuard implements CanActivate {
 
     // Check tenant status
     if (tenant.status === tenants_status.suspended) {
-      throw new UnauthorizedException('Tenant is suspended');
+      throw new UnauthorizedException(
+        'Tenant is suspended. Please contact the administrator to activate the tenant or use PATCH /api/v1/tenants/:id/activate to activate it.',
+      );
     }
 
     if (tenant.status === tenants_status.deleted) {
-      throw new UnauthorizedException('Tenant has been deleted');
+      throw new UnauthorizedException('Tenant has been deleted and is no longer accessible.');
     }
 
     if (tenant.status === tenants_status.provisioning) {
-      throw new UnauthorizedException('Tenant is still being provisioned');
+      throw new UnauthorizedException(
+        'Tenant is still being provisioned. Please wait a few moments and try again. The tenant will be automatically activated once provisioning is complete.',
+      );
     }
 
     // Attach tenant to request for use in controllers/services

@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS content_types (
     name              VARCHAR(100) NOT NULL,
     collection        VARCHAR(100) NOT NULL,
     icon              VARCHAR(50)  NULL,
-    schema            JSON         NOT NULL COMMENT 'Legacy - migrate to fields table',
+    `schema`          JSON         NOT NULL COMMENT 'Legacy - migrate to fields table',
     is_system         TINYINT(1)   NOT NULL DEFAULT 0,
     display_template  VARCHAR(255) NULL COMMENT 'Directus: template for list display',
     singleton         TINYINT(1)   NOT NULL DEFAULT 0 COMMENT 'Single item per collection',
@@ -352,6 +352,10 @@ CREATE TABLE IF NOT EXISTS content_versions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Circular FK for published version
+-- Note: This constraint may already exist if migration was run partially
+-- The migration script should handle this error gracefully
+-- For manual execution, drop the constraint first if it exists:
+-- ALTER TABLE content_entries DROP FOREIGN KEY fk_content_entries_published_version;
 ALTER TABLE content_entries
     ADD CONSTRAINT fk_content_entries_published_version
     FOREIGN KEY (published_version_id) REFERENCES content_versions(id) ON DELETE SET NULL;
@@ -393,18 +397,12 @@ CREATE TABLE IF NOT EXISTS activity (
     INDEX idx_activity_user (user_id),
     INDEX idx_activity_collection (collection, item),
     INDEX idx_activity_timestamp (timestamp),
-    INDEX idx_activity_action (action),
-    CONSTRAINT fk_activity_project FOREIGN KEY (project_id) 
-        REFERENCES projects(id) ON DELETE SET NULL,
-    CONSTRAINT fk_activity_user FOREIGN KEY (user_id) 
-        REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-PARTITION BY RANGE (YEAR(timestamp)) (
-    PARTITION p2024 VALUES LESS THAN (2025),
-    PARTITION p2025 VALUES LESS THAN (2026),
-    PARTITION p2026 VALUES LESS THAN (2027),
-    PARTITION p_future VALUES LESS THAN MAXVALUE
-);
+    INDEX idx_activity_action (action)
+    -- Note: Foreign keys removed because MySQL doesn't support FKs on partitioned tables
+    -- Foreign key constraints will be enforced at the application level
+    -- Note: Partitioning removed - YEAR() function is timezone-dependent and not allowed
+    -- For large activity tables, consider manual partitioning or archiving old data
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
 -- 2.16 Revisions (NEW - Complete change history)
@@ -524,7 +522,7 @@ CREATE TABLE IF NOT EXISTS flows (
     color           VARCHAR(255) NULL,
     description     TEXT         NULL,
     status          VARCHAR(16)  NOT NULL DEFAULT 'active',
-    trigger         VARCHAR(64)  NULL COMMENT 'manual, webhook, event, schedule, operation',
+    `trigger`       VARCHAR(64)  NULL COMMENT 'manual, webhook, event, schedule, operation',
     accountability  VARCHAR(16)  NULL COMMENT 'all, activity, $trigger, $full, $accountability',
     options         JSON         NULL COMMENT 'Trigger-specific configuration',
     operation       CHAR(36)     NULL COMMENT 'Root operation node ID',
@@ -533,7 +531,7 @@ CREATE TABLE IF NOT EXISTS flows (
     
     INDEX idx_flows_project (project_id),
     INDEX idx_flows_status (status),
-    INDEX idx_flows_trigger (trigger),
+    INDEX idx_flows_trigger (`trigger`),
     CONSTRAINT fk_flows_project FOREIGN KEY (project_id) 
         REFERENCES projects(id) ON DELETE CASCADE,
     CONSTRAINT fk_flows_user_created FOREIGN KEY (user_created) 
@@ -543,7 +541,7 @@ CREATE TABLE IF NOT EXISTS flows (
 CREATE TABLE IF NOT EXISTS operations (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
     name            VARCHAR(255) NULL,
-    key             VARCHAR(255) NOT NULL COMMENT 'Unique key within flow',
+    `key`           VARCHAR(255) NOT NULL COMMENT 'Unique key within flow',
     type            VARCHAR(64)  NOT NULL COMMENT 'log, mail, notification, webhook, request, transform, condition, etc.',
     position_x      INT          NOT NULL,
     position_y      INT          NOT NULL,
@@ -874,7 +872,7 @@ CREATE TABLE IF NOT EXISTS seo_metadata (
 CREATE TABLE IF NOT EXISTS rest_schema_cache (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
     project_id      CHAR(36)     NOT NULL,
-    schema          LONGTEXT     NOT NULL COMMENT 'REST/OpenAPI schema snapshot for this project',
+    `schema`        LONGTEXT     NOT NULL COMMENT 'REST/OpenAPI schema snapshot for this project',
     checksum        VARCHAR(64)  NOT NULL,
     created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

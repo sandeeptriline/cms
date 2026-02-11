@@ -5,10 +5,16 @@ Copy these variables to your `.env` file in the backend directory.
 ```env
 # Database Configuration
 # Local MySQL connection (adjust username, password, and port as needed)
-DATABASE_URL=mysql://root:password@localhost:3306/cms_platform
+DATABASE_URL=mysql://cms_user:password@localhost:3306/cms_platform
 TENANT_DATABASE_PREFIX=cms_tenant_
 DB_POOL_MIN=2
 DB_POOL_MAX=10
+
+# MySQL Root Connection (for tenant provisioning - database creation and privilege grants)
+# This is required for automatic tenant provisioning
+# If not provided, tenant provisioning will create databases but may fail to grant privileges
+# Format: mysql://root:password@localhost:3306
+MYSQL_ROOT_URL=mysql://root:password@localhost:3306
 
 # Note: Ensure MySQL 8.0+ is installed and running locally
 # Default MySQL port: 3306

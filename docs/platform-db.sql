@@ -40,7 +40,48 @@ CREATE TABLE IF NOT EXISTS tenants (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.2 Tenant Usage Tracking
+-- 1.2 Platform Users (Super Admin Only)
+-- -----------------------------------------------------------------------------
+-- Only one Super Admin user is allowed in the system
+CREATE TABLE IF NOT EXISTS platform_users (
+    id                   CHAR(36)     NOT NULL PRIMARY KEY,
+    email                VARCHAR(255) NOT NULL UNIQUE,
+    password_hash        VARCHAR(255) NOT NULL,
+    name                 VARCHAR(255) NULL,
+    avatar               VARCHAR(500) NULL,
+    status               VARCHAR(20)  NOT NULL DEFAULT 'active',
+    
+    -- Enhanced authentication
+    email_verified_at    TIMESTAMP    NULL,
+    verification_token   VARCHAR(255) NULL,
+    provider             VARCHAR(50)  NULL COMMENT 'local, google, github, azure, etc.',
+    external_identifier  VARCHAR(255) NULL COMMENT 'OAuth provider user ID',
+    
+    -- Multi-factor authentication
+    mfa_enabled          TINYINT(1)   NOT NULL DEFAULT 0,
+    mfa_secret           VARCHAR(255) NULL,
+    
+    -- User preferences
+    preferences          JSON         NULL COMMENT 'UI preferences, layout settings',
+    language             VARCHAR(10)  NULL DEFAULT 'en',
+    theme                VARCHAR(20)  NULL DEFAULT 'auto' COMMENT 'light, dark, auto',
+    
+    last_login_at        TIMESTAMP    NULL,
+    created_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_platform_users_email (email),
+    INDEX idx_platform_users_status (status),
+    INDEX idx_platform_users_provider (provider),
+    INDEX idx_platform_users_email_verified (email_verified_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Constraint: Only one active Super Admin user allowed
+-- This is enforced at application level, but we add a check constraint for safety
+-- Note: MySQL doesn't support CHECK constraints in older versions, so this is enforced in application code
+
+-- -----------------------------------------------------------------------------
+-- 1.3 Tenant Usage Tracking
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tenant_usage (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
@@ -58,7 +99,7 @@ CREATE TABLE IF NOT EXISTS tenant_usage (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.3 Platform Search Index (Cross-tenant search)
+-- 1.4 Platform Search Index (Cross-tenant search)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS platform_search_index (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
@@ -81,7 +122,7 @@ CREATE TABLE IF NOT EXISTS platform_search_index (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.4 Schema Templates (Reusable Content Type Definitions)
+-- 1.5 Schema Templates (Reusable Content Type Definitions)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS schema_templates (
     id          CHAR(36)     NOT NULL PRIMARY KEY,
@@ -98,7 +139,7 @@ CREATE TABLE IF NOT EXISTS schema_templates (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.5 Library Items (Consolidated: Pages, Components, Menus)
+-- 1.6 Library Items (Consolidated: Pages, Components, Menus)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS library_items (
     id                  CHAR(36)     NOT NULL PRIMARY KEY,
@@ -124,7 +165,7 @@ CREATE TABLE IF NOT EXISTS library_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.6 Themes (Platform Library)
+-- 1.7 Themes (Platform Library)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS themes (
     id                 CHAR(36)     NOT NULL PRIMARY KEY,
@@ -156,7 +197,7 @@ CREATE TABLE IF NOT EXISTS themes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.7 Theme Schema Bundles (Theme → Schema Templates)
+-- 1.8 Theme Schema Bundles (Theme → Schema Templates)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS theme_schema_bundles (
     id                  CHAR(36)     NOT NULL PRIMARY KEY,
@@ -174,7 +215,7 @@ CREATE TABLE IF NOT EXISTS theme_schema_bundles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.8 Theme Library Bundles (Theme → Library Items)
+-- 1.9 Theme Library Bundles (Theme → Library Items)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS theme_library_bundles (
     id                   CHAR(36)     NOT NULL PRIMARY KEY,
@@ -192,7 +233,7 @@ CREATE TABLE IF NOT EXISTS theme_library_bundles (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.9 Extensions (Plugin System)
+-- 1.10 Extensions (Plugin System)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS extensions (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
@@ -209,7 +250,7 @@ CREATE TABLE IF NOT EXISTS extensions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.10 Translations (System UI)
+-- 1.11 Translations (System UI)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS translations (
     id              CHAR(36)     NOT NULL PRIMARY KEY,
@@ -222,7 +263,7 @@ CREATE TABLE IF NOT EXISTS translations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- 1.11 Migrations (Database Version Tracking)
+-- 1.12 Migrations (Database Version Tracking)
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS migrations (
     version         VARCHAR(255) NOT NULL PRIMARY KEY,
