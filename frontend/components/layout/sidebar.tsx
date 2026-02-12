@@ -43,14 +43,14 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { BookOpen, Palette, Layers } from 'lucide-react'
 
-// Platform Admin Navigation (Super Admin only)
-const platformAdminNavigation = [
-  { name: 'Tenants', href: '/dashboard/tenants', icon: Building2 },
-  { name: 'Schema Library', href: '/dashboard/platform/schema-library', icon: Database },
-  { name: 'Content Library', href: '/dashboard/platform/content-library', icon: BookOpen },
-  { name: 'Component Library', href: '/dashboard/platform/component-library', icon: Layers },
-  { name: 'Theme Library', href: '/dashboard/platform/theme-library', icon: Palette },
-  { name: 'Settings', href: '/dashboard/platform/settings', icon: Settings },
+// Platform Admin Navigation (Super Admin only) - hrefs are relative to basePath
+const platformAdminNavItems = [
+  { name: 'Tenants', path: '/tenants', icon: Building2 },
+  { name: 'Schema Library', path: '/platform/schema-library', icon: Database },
+  { name: 'Content Library', path: '/platform/content-library', icon: BookOpen },
+  { name: 'Component Library', path: '/platform/component-library', icon: Layers },
+  { name: 'Theme Library', path: '/platform/theme-library', icon: Palette },
+  { name: 'Settings', path: '/platform/settings', icon: Settings },
 ]
 
 // Tenant Admin Navigation (Regular users)
@@ -82,23 +82,27 @@ const iconSidebarItems = [
 interface SidebarProps {
   isCollapsed: boolean
   onToggle: () => void
+  /** Base path (e.g. "/cp" or "/dashboard"). Nav items use this prefix. */
+  basePath?: string
 }
 
-export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
+export function Sidebar({ isCollapsed, onToggle, basePath = '/dashboard' }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
 
-  // Determine if user is Super Admin
-  const isPlatformAdmin = isSuperAdmin(user?.roles)
-
-  // Select appropriate navigation based on role
+  // Determine if user is Super Admin; when under /cp, always show platform admin nav
+  const isPlatformAdmin = isSuperAdmin(user?.roles) || pathname?.startsWith('/cp')
+  const platformAdminNavigation = platformAdminNavItems.map((item) => ({
+    ...item,
+    href: `${basePath}${item.path}`,
+  }))
   const navigation = isPlatformAdmin ? platformAdminNavigation : tenantAdminNavigation
 
   const handleLogout = async () => {
     try {
       await logout()
-      router.push('/login')
+      router.push(basePath === '/cp' ? '/cp/login' : '/login')
     } catch (error) {
       console.error('Logout error:', error)
     }
@@ -125,7 +129,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
       <div className="flex flex-col w-14 bg-sidebar-bg border-r border-sidebar-border">
         {/* Logo/Brand Icon */}
         <div className="flex items-center justify-center h-14 border-b border-sidebar-border">
-          <Link href="/dashboard" className="flex items-center justify-center w-10 h-10 rounded bg-primary/10 hover:bg-primary/20 transition-colors">
+          <Link href={basePath} className="flex items-center justify-center w-10 h-10 rounded bg-primary/10 hover:bg-primary/20 transition-colors">
             <span className="text-xs font-bold text-primary">CMS</span>
           </Link>
         </div>
@@ -221,7 +225,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {/* Logo/Brand - Directus style */}
         <div className="border-b border-sidebar-border px-4 py-3">
           <Link 
-            href="/dashboard" 
+            href={basePath} 
             className="flex items-center gap-2.5 group"
           >
             <div className="h-7 w-7 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">

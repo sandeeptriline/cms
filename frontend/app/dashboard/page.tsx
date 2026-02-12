@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useAuth } from '@/contexts/auth-context'
@@ -15,21 +16,28 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Checkbox } from '@/components/ui/checkbox'
-import { GripVertical, CheckCircle2, Loader2, AlertCircle, Database, Building2 } from 'lucide-react'
+import { GripVertical, CheckCircle2, Loader2, AlertCircle, Database } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import Link from 'next/link'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const isPlatformAdmin = isSuperAdmin(user?.roles)
   const [contentTypes, setContentTypes] = useState<ContentType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<string[]>([])
 
+  // Super Admin should use Control Panel at /cp
   useEffect(() => {
-    // Only load content types for tenant admin users
+    if (!authLoading && isPlatformAdmin) {
+      router.replace('/cp')
+      return
+    }
+  }, [authLoading, isPlatformAdmin, router])
+
+  useEffect(() => {
     if (!isPlatformAdmin) {
       loadContentTypes()
     } else {
@@ -72,71 +80,13 @@ export default function DashboardPage() {
     }
   }
 
-  // Platform Admin Dashboard
+  // Redirecting Super Admin to /cp (handled in useEffect above)
   if (isPlatformAdmin) {
     return (
-      <ProtectedRoute>
-        <DashboardLayout 
-          title="Platform Dashboard" 
-          icon={<Database className="h-5 w-5" />}
-        >
-          <div className="flex-1 bg-background">
-            <div className="px-6 py-6">
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {/* Quick Stats Cards */}
-                <div className="rounded-lg border border-border bg-card p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Total Tenants</p>
-                      <p className="text-2xl font-bold mt-1">-</p>
-                    </div>
-                    <Building2 className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Active Tenants</p>
-                      <p className="text-2xl font-bold mt-1">-</p>
-                    </div>
-                    <CheckCircle2 className="h-8 w-8 text-green-600" />
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-card p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Provisioning</p>
-                      <p className="text-2xl font-bold mt-1">-</p>
-                    </div>
-                    <Loader2 className="h-8 w-8 text-blue-600" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="mt-6">
-                <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Link href="/dashboard/tenants/new">
-                    <div className="rounded-lg border border-border bg-card p-6 hover:bg-muted/50 transition-colors cursor-pointer">
-                      <Building2 className="h-6 w-6 text-primary mb-2" />
-                      <h4 className="font-semibold mb-1">Create New Tenant</h4>
-                      <p className="text-sm text-muted-foreground">Provision a new tenant in the platform</p>
-                    </div>
-                  </Link>
-                  <Link href="/dashboard/tenants">
-                    <div className="rounded-lg border border-border bg-card p-6 hover:bg-muted/50 transition-colors cursor-pointer">
-                      <Database className="h-6 w-6 text-primary mb-2" />
-                      <h4 className="font-semibold mb-1">Manage Tenants</h4>
-                      <p className="text-sm text-muted-foreground">View and manage all tenants</p>
-                    </div>
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DashboardLayout>
-      </ProtectedRoute>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">Redirecting to Control Panel...</span>
+      </div>
     )
   }
 

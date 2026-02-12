@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { PlatformAdminRoute } from '@/components/auth/platform-admin-route'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { useAuth } from '@/contexts/auth-context'
+import { isSuperAdmin } from '@/lib/utils/roles'
 import { tenantsApi, Tenant } from '@/lib/api/tenants'
 import {
   Table,
@@ -32,7 +35,6 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useRouter } from 'next/navigation'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +47,7 @@ import { Input } from '@/components/ui/input'
 
 export default function TenantsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
   const [tenants, setTenants] = useState<Tenant[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,9 +55,18 @@ export default function TenantsPage() {
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Super Admin: redirect to Control Panel tenant pages
   useEffect(() => {
+    if (isSuperAdmin(user?.roles)) {
+      router.replace('/cp/tenants')
+      return
+    }
+  }, [user?.roles, router])
+
+  useEffect(() => {
+    if (isSuperAdmin(user?.roles)) return
     loadTenants()
-  }, [])
+  }, [user?.roles])
 
   const loadTenants = async () => {
     try {

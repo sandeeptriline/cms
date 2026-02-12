@@ -46,25 +46,24 @@ class ApiClient {
       async (error: AxiosError) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-        // Handle 401 Unauthorized - Token expired
+        // Handle 401 Unauthorized - Token expired; try refresh (Super Admin has no tenantId)
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true
 
-          try {
-            // Attempt to refresh token
-            const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null
-            const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null
+          const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null
+          const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null
 
-            if (refreshToken && tenantId) {
+          if (refreshToken) {
+            try {
+              const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+              if (tenantId) {
+                headers['X-Tenant-ID'] = tenantId
+              }
+
               const response = await axios.post(
                 `${API_URL}/auth/refresh`,
                 { refreshToken },
-                {
-                  headers: {
-                    'X-Tenant-ID': tenantId,
-                  },
-                  withCredentials: true,
-                }
+                { headers, withCredentials: true }
               )
 
               const { accessToken } = response.data
@@ -78,16 +77,16 @@ class ApiClient {
               }
 
               return this.client(originalRequest)
+            } catch (refreshError) {
+              // Refresh failed - clear storage and redirect to login
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('access_token')
+                localStorage.removeItem('refresh_token')
+                localStorage.removeItem('tenant_id')
+                window.location.href = '/login'
+              }
+              return Promise.reject(refreshError)
             }
-          } catch (refreshError) {
-            // Refresh failed - redirect to login
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('access_token')
-              localStorage.removeItem('refresh_token')
-              localStorage.removeItem('tenant_id')
-              window.location.href = '/login'
-            }
-            return Promise.reject(refreshError)
           }
         }
 

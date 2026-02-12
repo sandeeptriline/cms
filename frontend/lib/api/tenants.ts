@@ -6,15 +6,53 @@ export interface Tenant {
   slug: string
   status: 'provisioning' | 'active' | 'suspended' | 'deleted'
   dbName: string
-  config?: Record<string, any>
+  parentId?: string | null
+  dbHost?: string | null
+  dbConnection?: string | null
+  config?: Record<string, unknown>
   featureFlags?: Record<string, boolean>
   usageLimits?: {
     storage?: number
     apiCalls?: number
     users?: number
   }
+  storageUsed?: string | null
+  storageLimit?: string | null
+  apiCallsToday?: number | null
+  apiCallsLimit?: number | null
+  usersCount?: number | null
+  usersLimit?: number | null
+  lastActivityAt?: string | null
+  provisionedAt?: string | null
   createdAt: string
   updatedAt: string
+}
+
+/** Normalize backend response (snake_case from Prisma) to camelCase */
+function normalizeTenant(raw: Record<string, unknown>): Tenant {
+  return {
+    id: String(raw.id),
+    name: String(raw.name),
+    slug: String(raw.slug),
+    status: (raw.status as Tenant['status']) ?? 'provisioning',
+    dbName: String((raw.dbName ?? raw.db_name) ?? ''),
+    parentId: (raw.parentId ?? raw.parent_id) as string | null | undefined,
+    dbHost: (raw.dbHost ?? raw.db_host) as string | null | undefined,
+    dbConnection: (raw.dbConnection ?? raw.db_connection) as string | null | undefined,
+    config: raw.config as Tenant['config'],
+    featureFlags: (raw.featureFlags ?? raw.feature_flags) as Tenant['featureFlags'],
+    usageLimits: (raw.usageLimits ?? raw.usage_limits) as Tenant['usageLimits'],
+    storageUsed: (raw.storageUsed ?? (raw.storage_used != null ? String(raw.storage_used) : null)) as string | null | undefined,
+    storageLimit: (raw.storageLimit ?? (raw.storage_limit != null ? String(raw.storage_limit) : null)) as string | null | undefined,
+    apiCallsToday: (raw.apiCallsToday ?? raw.api_calls_today) as number | null | undefined,
+    apiCallsLimit: (raw.apiCallsLimit ?? raw.api_calls_limit) as number | null | undefined,
+    usersCount: (raw.usersCount ?? raw.users_count) as number | null | undefined,
+    usersLimit: (raw.usersLimit ?? raw.users_limit) as number | null | undefined,
+    lastActivityAt: (raw.lastActivityAt ?? (raw.last_activity_at != null ? String(raw.last_activity_at) : null)) as string | null | undefined,
+    provisionedAt: (raw.provisionedAt ?? (raw.provisioned_at != null ? String(raw.provisioned_at) : null)) as string | null | undefined,
+    createdAt: String(raw.createdAt ?? raw.created_at),
+    updatedAt: String(raw.updatedAt ?? raw.updated_at),
+  }
 }
 
 export interface CreateTenantDto {
@@ -45,38 +83,38 @@ export interface UpdateTenantDto {
 
 export const tenantsApi = {
   async getAll(): Promise<Tenant[]> {
-    const response = await apiClient.get<Tenant[]>('/tenants')
-    return response.data
+    const response = await apiClient.get<Record<string, unknown>[]>('/tenants')
+    return response.data.map((row) => normalizeTenant(row))
   },
 
   async getById(id: string): Promise<Tenant> {
-    const response = await apiClient.get<Tenant>(`/tenants/${id}`)
-    return response.data
+    const response = await apiClient.get<Record<string, unknown>>(`/tenants/${id}`)
+    return normalizeTenant(response.data)
   },
 
   async getBySlug(slug: string): Promise<Tenant> {
-    const response = await apiClient.get<Tenant>(`/tenants/slug/${slug}`)
-    return response.data
+    const response = await apiClient.get<Record<string, unknown>>(`/tenants/slug/${slug}`)
+    return normalizeTenant(response.data)
   },
 
   async create(data: CreateTenantDto): Promise<Tenant> {
-    const response = await apiClient.post<Tenant>('/tenants', data)
-    return response.data
+    const response = await apiClient.post<Record<string, unknown>>('/tenants', data)
+    return normalizeTenant(response.data)
   },
 
   async update(id: string, data: UpdateTenantDto): Promise<Tenant> {
-    const response = await apiClient.patch<Tenant>(`/tenants/${id}`, data)
-    return response.data
+    const response = await apiClient.patch<Record<string, unknown>>(`/tenants/${id}`, data)
+    return normalizeTenant(response.data)
   },
 
   async activate(id: string): Promise<Tenant> {
-    const response = await apiClient.patch<Tenant>(`/tenants/${id}/activate`)
-    return response.data
+    const response = await apiClient.patch<Record<string, unknown>>(`/tenants/${id}/activate`)
+    return normalizeTenant(response.data)
   },
 
   async suspend(id: string): Promise<Tenant> {
-    const response = await apiClient.patch<Tenant>(`/tenants/${id}/suspend`)
-    return response.data
+    const response = await apiClient.patch<Record<string, unknown>>(`/tenants/${id}/suspend`)
+    return normalizeTenant(response.data)
   },
 
   async delete(id: string): Promise<void> {

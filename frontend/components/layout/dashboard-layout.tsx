@@ -12,6 +12,8 @@ interface DashboardLayoutProps {
   showActions?: boolean
   itemCount?: number
   icon?: React.ReactNode
+  /** Base path for nav (e.g. "/cp" for control panel). Defaults to "/dashboard". */
+  basePath?: string
 }
 
 export function DashboardLayout({ 
@@ -20,7 +22,8 @@ export function DashboardLayout({
   subtitle,
   showActions = true,
   itemCount,
-  icon
+  icon,
+  basePath = '/dashboard',
 }: DashboardLayoutProps) {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false)
@@ -31,6 +34,7 @@ export function DashboardLayout({
       <Sidebar 
         isCollapsed={leftSidebarCollapsed}
         onToggle={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
+        basePath={basePath}
       />
 
       {/* Main Content Area */}

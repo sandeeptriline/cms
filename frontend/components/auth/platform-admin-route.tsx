@@ -21,12 +21,12 @@ export function PlatformAdminRoute({ children }: PlatformAdminRouteProps) {
   useEffect(() => {
     if (!loading && isAuthenticated) {
       if (!user || !isSuperAdmin(user.roles)) {
-        // User is not Super Admin, redirect to dashboard
+        // User is not Super Admin, redirect to tenant dashboard
         router.push('/dashboard')
       }
     } else if (!loading && !isAuthenticated) {
-      // Not authenticated, redirect to login
-      router.push('/login')
+      // Not authenticated, redirect to Control Panel login
+      router.push('/cp/login')
     }
   }, [user, loading, isAuthenticated, router])
 

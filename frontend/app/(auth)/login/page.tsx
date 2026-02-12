@@ -264,8 +264,15 @@ export default function LoginPage() {
             </Button>
           </div>
 
+          {/* Control Panel (Super Admin) link */}
+          <div className="mt-6 text-center text-sm">
+            <Link href="/cp/login" className="text-[#6366f1] font-medium hover:underline">
+              Platform Admin (Control Panel) →
+            </Link>
+          </div>
+
           {/* Registration Link */}
-          <div className="mt-8 text-center text-sm">
+          <div className="mt-4 text-center text-sm">
             <span className="text-gray-600">Don't have an account? </span>
             <Link href="/register" className="text-[#6366f1] font-semibold hover:underline">
               Register for Free
