@@ -9,6 +9,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TenantPrismaService } from '../prisma/tenant-prisma.service';
 import { TenantsModule } from '../tenants/tenants.module';
+import { PlatformUsersModule } from '../platform-users/platform-users.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { TenantsModule } from '../tenants/tenants.module';
     }),
     PrismaModule,
     TenantsModule, // For TenantGuard
+    PlatformUsersModule, // For PlatformUsersService
   ],
   controllers: [AuthController],
   providers: [

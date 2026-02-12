@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string, tenantId: string) => Promise<void>
+  platformAdminLogin: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, tenantId: string) => Promise<void>
   logout: () => Promise<void>
   refreshAuth: () => Promise<void>
@@ -21,12 +22,12 @@ const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
 
 // Helper to convert API response user to User type
-function mapAuthResponseToUser(authUser: any, tenantId: string): User {
+function mapAuthResponseToUser(authUser: any, tenantId: string | null): User {
   return {
     id: authUser.id,
     email: authUser.email,
     name: authUser.name,
-    tenantId: tenantId,
+    tenantId: tenantId, // Can be null for Super Admin
     roles: authUser.roles,
   }
 }
@@ -69,6 +70,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // Set user (map API response to User type)
         setUser(mapAuthResponseToUser(response.user, tenantId))
+
+        toast({
+          title: 'Success',
+          description: 'Logged in successfully',
+          variant: 'success',
+        })
+      } catch (error: any) {
+        const message = error?.response?.data?.message || 'Login failed'
+        toast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive',
+        })
+        throw error
+      }
+    },
+    [toast]
+  )
+
+  const platformAdminLogin = useCallback(
+    async (email: string, password: string) => {
+      try {
+        const response: AuthResponse = await authApi.platformAdminLogin({ email, password })
+        
+        // Store tokens (no tenant ID for Super Admin)
+        localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
+        localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
+        // Don't store tenant_id for Super Admin (it's null)
+
+        // Set user (tenantId is null for Super Admin)
+        setUser(mapAuthResponseToUser(response.user, null))
 
         toast({
           title: 'Success',
@@ -141,19 +173,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshAuth = useCallback(async () => {
     const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-    const tenantId = localStorage.getItem(TENANT_ID_KEY)
-
-    if (!refreshToken || !tenantId) {
+    if (!refreshToken) {
       setUser(null)
       return
     }
 
     try {
+      // Try to get tenantId from stored user or localStorage
+      // For Super Admin, tenantId will be null
+      const storedTenantId = localStorage.getItem(TENANT_ID_KEY)
+      const tenantId = storedTenantId || null
+
       const response: AuthResponse = await authApi.refreshToken(refreshToken, tenantId)
       
       localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
       localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
-      setUser(mapAuthResponseToUser(response.user, tenantId))
+      
+      // Extract tenantId from response user or use stored value
+      // For Super Admin, tenantId will be null
+      const userTenantId = response.user.tenantId || storedTenantId || null
+      if (userTenantId) {
+        localStorage.setItem(TENANT_ID_KEY, userTenantId)
+      } else {
+        // Super Admin - remove tenant_id from storage
+        localStorage.removeItem(TENANT_ID_KEY)
+      }
+      
+      setUser(mapAuthResponseToUser(response.user, userTenantId))
     } catch (error) {
       // Refresh failed, logout
       localStorage.removeItem(ACCESS_TOKEN_KEY)
@@ -168,6 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     isAuthenticated: !!user,
     login,
+    platformAdminLogin,
     register,
     logout,
     refreshAuth,

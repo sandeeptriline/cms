@@ -7,7 +7,7 @@ import { Request } from 'express';
 export interface JwtPayload {
   sub: string; // user id
   email: string;
-  tenantId: string;
+  tenantId: string | null; // Can be null for Super Admin
   roles?: string[];
   iat?: number;
   exp?: number;
@@ -31,14 +31,23 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload) {
-    if (!payload.sub || !payload.email || !payload.tenantId) {
+    if (!payload.sub || !payload.email) {
       throw new UnauthorizedException('Invalid token payload');
+    }
+
+    // tenantId can be null for Super Admin
+    // For tenant users, tenantId must be present
+    if (payload.tenantId === null || payload.tenantId === undefined) {
+      // Only allow null tenantId for Super Admin
+      if (!payload.roles || !payload.roles.includes('Super Admin')) {
+        throw new UnauthorizedException('Invalid token payload: tenantId required for non-Super Admin users');
+      }
     }
 
     return {
       userId: payload.sub,
       email: payload.email,
-      tenantId: payload.tenantId,
+      tenantId: payload.tenantId, // Can be null for Super Admin
       roles: payload.roles || [],
     };
   }

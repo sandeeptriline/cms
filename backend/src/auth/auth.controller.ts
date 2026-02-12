@@ -104,6 +104,52 @@ export class AuthController {
   }
 
   @Public()
+  @Post('platform-admin/login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Platform Admin Login (Super Admin)',
+    description: 'Authenticate Super Admin user. No tenant ID required. Only users with "Super Admin" role can login.',
+  })
+  @ApiBody({
+    type: LoginDto,
+    description: 'Super Admin login credentials',
+    examples: {
+      login: {
+        summary: 'Super Admin login',
+        value: {
+          email: 'admin@platform.com',
+          password: 'SecurePassword123!',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials or user is not a Super Admin',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Invalid credentials' },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
+  async platformAdminLogin(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.platformAdminLogin(loginDto);
+    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    return result;
+  }
+
+  @Public()
   @UseGuards(TenantGuard) // Require tenant context
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -162,7 +208,6 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(TenantGuard) // Require tenant context
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -205,9 +250,22 @@ export class AuthController {
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const tenantId = (request as any).tenantId;
+    // Extract tenantId from refresh token payload
+    // The refresh token contains the original tenantId (can be null for Super Admin)
+    let tenantId: string | null = null;
+    
+    try {
+      // Try to decode the refresh token to get tenantId
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.decode(refreshTokenDto.refreshToken) as any;
+      tenantId = decoded?.tenantId || null;
+    } catch (error) {
+      // If decoding fails, will be handled in service
+    }
+
+    // For tenant users, also check request headers
     if (!tenantId) {
-      throw new Error('Tenant context is required. Provide X-Tenant-ID or X-Tenant-Slug header.');
+      tenantId = request.headers['x-tenant-id'] as string || (request as any).query?.tenantId || null;
     }
 
     const result = await this.authService.refreshToken(

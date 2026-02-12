@@ -14,8 +14,29 @@ export class TenantGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
-    
-    // Extract tenant identifier from various sources
+    const user = request.user; // From JWT guard (if authenticated)
+
+    // Super Admin can access any tenant or no tenant
+    if (user && user.roles && user.roles.includes('Super Admin')) {
+      // Super Admin can proceed without tenant context
+      // Or can access any tenant if tenant ID is provided
+      const tenantIdentifier = this.extractTenantId(request);
+      if (tenantIdentifier) {
+        // Optional: Validate tenant exists for Super Admin
+        const tenant = await this.prisma.tenants.findUnique({
+          where: { id: tenantIdentifier },
+        });
+        if (tenant) {
+          request.tenant = tenant;
+          request.tenantId = tenant.id;
+          request.tenantDbName = tenant.db_name;
+        }
+      }
+      // Super Admin can proceed even without tenant context
+      return true;
+    }
+
+    // Regular tenant users require tenant context
     const tenantIdentifier = this.extractTenantId(request);
     
     if (!tenantIdentifier) {

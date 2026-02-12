@@ -12,12 +12,13 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../prisma/tenant-prisma.service';
+import { PlatformUsersService } from '../platform-users/platform-users.service';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface TokenPayload {
   sub: string; // user id
   email: string;
-  tenantId: string;
+  tenantId: string | null; // Can be null for Super Admin
   roles?: string[];
 }
 
@@ -41,6 +42,7 @@ export class AuthService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private tenantPrisma: TenantPrismaService,
+    private platformUsersService: PlatformUsersService,
   ) {}
 
   /**
@@ -95,7 +97,38 @@ export class AuthService {
   }
 
   /**
-   * Login user
+   * Platform Admin Login (Super Admin)
+   * No tenant ID required
+   */
+  async platformAdminLogin(loginDto: LoginDto): Promise<AuthResponse> {
+    const user = await this.platformUsersService.authenticate(
+      loginDto.email,
+      loginDto.password,
+    );
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if user has Super Admin role
+    const roles = user.user_roles.map((ur) => ur.role.name);
+    if (!roles.includes('Super Admin')) {
+      throw new UnauthorizedException('User is not a Super Admin');
+    }
+
+    // Update last login
+    await this.prisma.users.update({
+      where: { id: user.id },
+      data: { last_login_at: new Date() },
+    });
+
+    // Generate tokens with tenantId: null for Super Admin
+    return this.generateTokens(user.id, user.email, null, roles, user.name);
+  }
+
+  /**
+   * Tenant User Login
+   * Requires tenant ID
    */
   async login(loginDto: LoginDto, tenantId: string): Promise<AuthResponse> {
     // Get tenant to access tenant database
@@ -126,8 +159,12 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check user status
-    if (user.status !== 'active') {
+    // Check user status (1 = active, 0 = inactive)
+    // Handle both string ('active') and numeric (1) for backward compatibility
+    const isActive = typeof user.status === 'number'
+      ? user.status === 1
+      : user.status === 'active';
+    if (!isActive) {
       throw new UnauthorizedException('User account is not active');
     }
 
@@ -169,15 +206,37 @@ export class AuthService {
 
   /**
    * Refresh access token
+   * Supports both platform users (Super Admin) and tenant users
    */
-  async refreshToken(refreshToken: string, tenantId: string): Promise<AuthResponse> {
+  async refreshToken(refreshToken: string, tenantId: string | null): Promise<AuthResponse> {
     try {
       const payload = jwt.verify(
         refreshToken,
         this.configService.get<string>('JWT_REFRESH_SECRET') || 'your-refresh-secret',
       ) as any;
 
-      // Get user from tenant database
+      // If tenantId is null, check platform database (Super Admin)
+      if (tenantId === null) {
+        const user = await this.prisma.users.findUnique({
+          where: { id: payload.sub },
+          include: {
+            user_roles: {
+              include: {
+                role: true,
+              },
+            },
+          },
+        });
+
+        if (!user || user.status !== 1) {
+          throw new UnauthorizedException('User not found or inactive');
+        }
+
+        const roles = user.user_roles.map((ur) => ur.role.name);
+        return this.generateTokens(user.id, user.email, null, roles, user.name);
+      }
+
+      // Otherwise, check tenant database (regular user)
       const tenant = await this.prisma.tenants.findUnique({
         where: { id: tenantId },
       });
@@ -191,7 +250,7 @@ export class AuthService {
           id: string;
           email: string;
           name: string | null;
-          status: string;
+          status: number | string;
         }>>(
           `SELECT id, email, name, status FROM users WHERE id = ? LIMIT 1`,
           payload.sub,
@@ -199,7 +258,11 @@ export class AuthService {
         return result[0];
       });
 
-      if (!user || user.status !== 'active') {
+      // Check user status (1 = active, 0 = inactive)
+      const isActive = typeof user.status === 'number'
+        ? user.status === 1
+        : user.status === 'active';
+      if (!user || !isActive) {
         throw new UnauthorizedException('User not found or inactive');
       }
 
@@ -233,14 +296,14 @@ export class AuthService {
   private async generateTokens(
     userId: string,
     email: string,
-    tenantId: string,
+    tenantId: string | null, // Can be null for Super Admin
     roles: string[] = [],
     name: string | null = null,
   ): Promise<AuthResponse> {
     const payload: TokenPayload = {
       sub: userId,
       email,
-      tenantId,
+      tenantId: tenantId || null, // Can be null for Super Admin
       roles,
     };
 
@@ -275,8 +338,19 @@ export class AuthService {
 
   /**
    * Validate user (for guards)
+   * Supports both platform users (Super Admin) and tenant users
    */
-  async validateUser(userId: string, tenantId: string) {
+  async validateUser(userId: string, tenantId: string | null) {
+    // If tenantId is null, check platform database (Super Admin)
+    if (tenantId === null) {
+      const user = await this.prisma.users.findUnique({
+        where: { id: userId },
+      });
+      // Check status: 1 = active, 0 = inactive
+      return user && user.status === 1 ? user : null;
+    }
+
+    // Otherwise, check tenant database (regular user)
     const tenant = await this.prisma.tenants.findUnique({
       where: { id: tenantId },
     });
@@ -290,7 +364,7 @@ export class AuthService {
         id: string;
         email: string;
         name: string | null;
-        status: string;
+        status: number | string; // Can be TINYINT(1) or VARCHAR
       }>>(
         `SELECT id, email, name, status FROM users WHERE id = ? LIMIT 1`,
         userId,
@@ -298,7 +372,11 @@ export class AuthService {
       return result[0];
     });
 
-    if (!user || user.status !== 'active') {
+    // Check status: 1 = active, 0 = inactive (or 'active' string for backward compatibility)
+    const isActive = typeof user.status === 'number'
+      ? user.status === 1
+      : user.status === 'active';
+    if (!user || !isActive) {
       return null;
     }
 
