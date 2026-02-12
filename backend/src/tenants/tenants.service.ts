@@ -54,13 +54,16 @@ export class TenantsService {
 
     // Provision tenant database asynchronously
     // Don't await - let it run in background
-    setImmediate(() => {
-      this.provisioningService.provisionTenant(tenant.id, dbName).catch((error) => {
-        console.error(`Failed to provision tenant ${tenant.id}:`, error);
+    // But ensure errors are properly logged
+    setImmediate(async () => {
+      try {
+        await this.provisioningService.provisionTenant(tenant.id, dbName);
+        console.log(`✅ Tenant ${tenant.id} (${dbName}) provisioning completed successfully`);
+      } catch (error: any) {
+        console.error(`❌ Failed to provision tenant ${tenant.id} (${dbName}):`, error.message);
+        console.error('Error details:', error);
         // Status will be updated to suspended by provisioning service on failure
-      }).then(() => {
-        console.log(`Tenant ${tenant.id} provisioning completed`);
-      });
+      }
     });
 
     return tenant;

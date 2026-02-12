@@ -86,8 +86,9 @@ mysql -u root -p
 CREATE USER 'cms_user'@'localhost' IDENTIFIED BY 'your_secure_password';
 
 -- Grant privileges
+-- Note: MySQL doesn't support wildcards in GRANT statements
+-- Tenant databases will be granted privileges automatically during provisioning
 GRANT ALL PRIVILEGES ON cms_platform.* TO 'cms_user'@'localhost';
-GRANT ALL PRIVILEGES ON cms_tenant_*.* TO 'cms_user'@'localhost';
 
 -- Apply changes
 FLUSH PRIVILEGES;

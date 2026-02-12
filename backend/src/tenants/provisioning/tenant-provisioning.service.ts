@@ -82,13 +82,52 @@ export class TenantProvisioningService {
     // Sanitize database name to prevent SQL injection
     const sanitizedDbName = this.sanitizeDatabaseName(dbName);
 
+    // Try to use root connection if available (required for CREATE DATABASE)
+    const rootUrl = this.configService.get<string>('MYSQL_ROOT_URL', '');
+    let rootPrisma: any = null;
+    
+    if (rootUrl) {
+      try {
+        // Create a temporary Prisma client with root connection
+        const { PrismaClient } = require('@prisma/client');
+        rootPrisma = new PrismaClient({
+          datasources: {
+            db: { url: rootUrl },
+          },
+        });
+        // Connect the root client
+        await rootPrisma.$connect();
+        this.logger.log('Using MySQL root connection for database creation');
+      } catch (error) {
+        this.logger.warn(`Failed to create root Prisma client: ${error.message}`);
+        this.logger.warn('Falling back to regular connection (may fail if user lacks CREATE DATABASE privilege)');
+      }
+    } else {
+      this.logger.warn('MYSQL_ROOT_URL not configured. Database creation may fail if cms_user lacks CREATE DATABASE privilege.');
+      this.logger.warn('Set MYSQL_ROOT_URL in .env file for automatic database creation.');
+    }
+
+    const prismaClient = rootPrisma || this.prisma;
+
     try {
-      await this.prisma.$executeRawUnsafe(
+      await prismaClient.$executeRawUnsafe(
         `CREATE DATABASE IF NOT EXISTS \`${sanitizedDbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
       );
-    } catch (error) {
+      this.logger.log(`Database ${dbName} created successfully`);
+    } catch (error: any) {
       this.logger.error(`Failed to create database ${dbName}: ${error.message}`);
+      if (error.code === 'ER_ACCESS_DENIED_ERROR' || error.message?.includes('Access denied')) {
+        throw new InternalServerErrorException(
+          `Failed to create database: Access denied. ` +
+          `The database user needs CREATE DATABASE privilege, or set MYSQL_ROOT_URL in .env file. ` +
+          `You can manually create the database: CREATE DATABASE \`${sanitizedDbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+        );
+      }
       throw error;
+    } finally {
+      if (rootPrisma) {
+        await rootPrisma.$disconnect();
+      }
     }
   }
 

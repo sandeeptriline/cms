@@ -101,18 +101,29 @@ export class AuthService {
    * No tenant ID required
    */
   async platformAdminLogin(loginDto: LoginDto): Promise<AuthResponse> {
+    this.logger.debug(`Platform Admin login attempt for email: ${loginDto.email}`);
+
     const user = await this.platformUsersService.authenticate(
       loginDto.email,
       loginDto.password,
     );
 
     if (!user) {
+      this.logger.warn(`Platform Admin login failed: Invalid credentials for ${loginDto.email}`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
     // Check if user has Super Admin role
+    if (!user.user_roles || user.user_roles.length === 0) {
+      this.logger.warn(`Platform Admin login failed: User ${user.id} has no roles assigned`);
+      throw new UnauthorizedException('User is not a Super Admin');
+    }
+
     const roles = user.user_roles.map((ur) => ur.role.name);
     if (!roles.includes('Super Admin')) {
+      this.logger.warn(
+        `Platform Admin login failed: User ${user.id} does not have Super Admin role. Current roles: ${roles.join(', ')}`,
+      );
       throw new UnauthorizedException('User is not a Super Admin');
     }
 
@@ -121,6 +132,8 @@ export class AuthService {
       where: { id: user.id },
       data: { last_login_at: new Date() },
     });
+
+    this.logger.log(`Platform Admin login successful for user: ${user.email}`);
 
     // Generate tokens with tenantId: null for Super Admin
     return this.generateTokens(user.id, user.email, null, roles, user.name);

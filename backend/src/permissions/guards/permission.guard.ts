@@ -13,6 +13,12 @@ import {
   RequireAllPermissions,
 } from '../decorators/require-permission.decorator';
 
+// Type definitions for permission metadata
+type PermissionMetadata =
+  | string // Single permission
+  | { type: 'any'; permissions: string[] } // Any of permissions
+  | { type: 'all'; permissions: string[] }; // All permissions
+
 @Injectable()
 export class PermissionGuard implements CanActivate {
   constructor(
@@ -22,7 +28,7 @@ export class PermissionGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Get permission requirement from decorator
-    const permissionMetadata = this.reflector.getAllAndOverride<any>(
+    const permissionMetadata = this.reflector.getAllAndOverride<PermissionMetadata>(
       PERMISSION_KEY,
       [context.getHandler(), context.getClass()],
     );
@@ -59,39 +65,42 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
-    if (permissionMetadata.type === 'any') {
-      // Any of the permissions
-      const hasAny = await this.permissionsService.hasAnyPermission(
-        userId,
-        permissionMetadata.permissions,
-      );
-
-      if (!hasAny) {
-        throw new ForbiddenException(
-          `Permission denied: One of [${permissionMetadata.permissions.join(', ')}] required`,
+    // Type guard for object metadata
+    if (typeof permissionMetadata === 'object' && permissionMetadata !== null) {
+      if ('type' in permissionMetadata && permissionMetadata.type === 'any') {
+        // Any of the permissions
+        const hasAny = await this.permissionsService.hasAnyPermission(
+          userId,
+          permissionMetadata.permissions,
         );
+
+        if (!hasAny) {
+          throw new ForbiddenException(
+            `Permission denied: One of [${permissionMetadata.permissions.join(', ')}] required`,
+          );
+        }
+
+        return true;
       }
 
-      return true;
-    }
-
-    if (permissionMetadata.type === 'all') {
-      // All permissions required
-      const hasAll = await this.permissionsService.hasAllPermissions(
-        userId,
-        permissionMetadata.permissions,
-      );
-
-      if (!hasAll) {
-        throw new ForbiddenException(
-          `Permission denied: All of [${permissionMetadata.permissions.join(', ')}] required`,
+      if ('type' in permissionMetadata && permissionMetadata.type === 'all') {
+        // All permissions required
+        const hasAll = await this.permissionsService.hasAllPermissions(
+          userId,
+          permissionMetadata.permissions,
         );
-      }
 
-      return true;
+        if (!hasAll) {
+          throw new ForbiddenException(
+            `Permission denied: All of [${permissionMetadata.permissions.join(', ')}] required`,
+          );
+        }
+
+        return true;
+      }
     }
 
     // Unknown permission requirement type
-    return false;
+    throw new ForbiddenException('Invalid permission requirement');
   }
 }

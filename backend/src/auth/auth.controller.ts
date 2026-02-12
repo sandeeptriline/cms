@@ -108,8 +108,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Platform Admin Login (Super Admin)',
-    description: 'Authenticate Super Admin user. No tenant ID required. Only users with "Super Admin" role can login.',
+    description:
+      'Authenticate Super Admin user. **No tenant ID or tenant headers required.** Only users with "Super Admin" role can login. This endpoint is for platform-level administration. Do not provide X-Tenant-ID or X-Tenant-Slug headers.',
   })
+  // Note: No @ApiSecurity decorator - this endpoint does NOT require tenant headers
   @ApiBody({
     type: LoginDto,
     description: 'Super Admin login credentials',
@@ -117,15 +119,15 @@ export class AuthController {
       login: {
         summary: 'Super Admin login',
         value: {
-          email: 'admin@platform.com',
-          password: 'SecurePassword123!',
+          email: 'admin@example.com',
+          password: 'admin@123',
         },
       },
     },
   })
   @ApiResponse({
     status: 200,
-    description: 'Login successful',
+    description: 'Login successful. Returns JWT tokens and user information.',
     type: AuthResponseDto,
   })
   @ApiResponse({
@@ -135,7 +137,11 @@ export class AuthController {
       type: 'object',
       properties: {
         statusCode: { type: 'number', example: 401 },
-        message: { type: 'string', example: 'Invalid credentials' },
+        message: {
+          type: 'string',
+          example: 'Invalid credentials',
+          description: 'Either email/password is incorrect or user does not have Super Admin role',
+        },
         error: { type: 'string', example: 'Unauthorized' },
       },
     },
@@ -212,7 +218,8 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Generate new access and refresh tokens using a valid refresh token.',
+    description:
+      'Generate new access and refresh tokens using a valid refresh token. Works for both Super Admin (no tenant required) and tenant users (tenant context optional, extracted from token).',
   })
   @ApiBody({
     type: RefreshTokenDto,
@@ -283,7 +290,8 @@ export class AuthController {
   @Get('me')
   @ApiOperation({
     summary: 'Get current user',
-    description: 'Returns the authenticated user\'s information based on the JWT token.',
+    description:
+      'Returns the authenticated user\'s information based on the JWT token. Works for both Super Admin (tenantId: null) and tenant users.',
   })
   @ApiBearerAuth('JWT-auth')
   @ApiResponse({
