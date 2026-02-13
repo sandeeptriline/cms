@@ -5,13 +5,19 @@ import { useRouter, useParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { tenantsApi, Tenant } from '@/lib/api/tenants'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Building2, ArrowLeft, Loader2, AlertCircle, Edit, Play, Pause, Trash2, Database, Calendar, Hash } from 'lucide-react'
+import { Building2, Loader2, AlertCircle, LayoutDashboard, Users, Settings, Database, BarChart3, Shield } from 'lucide-react'
 import { useToast } from '@/lib/hooks/use-toast'
-import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { TenantHeader } from './components/tenant-header'
+import { TenantTabs } from './components/tenant-tabs'
+import { OverviewTab } from './components/overview-tab'
+import { UsersTab } from './components/users-tab'
+import { ConfigurationTab } from './components/configuration-tab'
+import { AnalyticsTab } from './components/analytics-tab'
+import { RolesPermissionsTab } from './components/roles-permissions-tab'
+import { CommandPalette } from './components/command-palette'
+import { ContextPanel } from './components/context-panel'
+import { TenantUser } from '@/lib/api/tenant-users'
 
 export default function CpTenantDetailPage() {
   const router = useRouter()
@@ -22,6 +28,10 @@ export default function CpTenantDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('overview')
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [contextPanelOpen, setContextPanelOpen] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<TenantUser | null>(null)
 
   useEffect(() => {
     if (tenantId) loadTenant()
@@ -85,10 +95,41 @@ export default function CpTenantDetailPage() {
     }
   }
 
-  const getStatusBadge = (status: Tenant['status']) => {
-    const colors = { active: 'bg-green-100 text-green-800 border-green-200', suspended: 'bg-yellow-100 text-yellow-800 border-yellow-200', provisioning: 'bg-blue-100 text-blue-800 border-blue-200', deleted: 'bg-red-100 text-red-800 border-red-200' }
-    return <Badge variant="outline" className={cn('text-xs font-medium', colors[status])}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>
+  const handleCommandAction = (actionId: string) => {
+    switch (actionId) {
+      case 'create-user':
+        setActiveTab('users')
+        // The Users tab will handle opening the create modal
+        setTimeout(() => {
+          const event = new CustomEvent('open-create-user-modal')
+          window.dispatchEvent(event)
+        }, 100)
+        break
+      case 'view-users':
+        setActiveTab('users')
+        break
+      case 'view-settings':
+        setActiveTab('configuration')
+        break
+      case 'view-database':
+        setActiveTab('configuration')
+        break
+      case 'view-analytics':
+        setActiveTab('analytics')
+        break
+      case 'activate-tenant':
+        handleActivate()
+        break
+      case 'suspend-tenant':
+        handleSuspend()
+        break
+      default:
+        break
+    }
   }
+
+
+
 
   if (loading) {
     return (
@@ -109,108 +150,86 @@ export default function CpTenantDetailPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error || 'Tenant not found'}</AlertDescription>
           </Alert>
-          <div className="mt-4">
-            <Link href="/cp/tenants">
-              <Button variant="outline"><ArrowLeft className="h-4 w-4 mr-2" />Back to Tenants</Button>
-            </Link>
-          </div>
         </div>
       </DashboardLayout>
     )
   }
 
+  const tabs = [
+    {
+      value: 'overview',
+      label: 'Overview',
+      icon: <LayoutDashboard className="h-4 w-4" />,
+      content: <OverviewTab tenant={tenant} onRefresh={loadTenant} />,
+    },
+    {
+      value: 'users',
+      label: 'Users',
+      icon: <Users className="h-4 w-4" />,
+      content: <UsersTab tenant={tenant} onUserSelected={setSelectedUser} />,
+    },
+    {
+      value: 'configuration',
+      label: 'Configuration',
+      icon: <Settings className="h-4 w-4" />,
+      content: <ConfigurationTab tenant={tenant} onRefresh={loadTenant} />,
+    },
+    {
+      value: 'analytics',
+      label: 'Analytics',
+      icon: <BarChart3 className="h-4 w-4" />,
+      content: <AnalyticsTab tenant={tenant} onRefresh={loadTenant} />,
+    },
+    {
+      value: 'roles-permissions',
+      label: 'Roles & Permissions',
+      icon: <Shield className="h-4 w-4" />,
+      content: <RolesPermissionsTab tenant={tenant} />,
+    },
+  ]
+
   return (
-    <DashboardLayout basePath="/cp" title="Tenant Details" icon={<Building2 className="h-5 w-5" />}>
-      <div className="flex-1 bg-background">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <Link href="/cp/tenants" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Tenants
-          </Link>
-          <div className="flex items-center gap-2">
-            {tenant.status === 'suspended' && (
-              <Button onClick={handleActivate} disabled={actionLoading !== null} size="sm" variant="outline">
-                {actionLoading === 'activate' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-                Activate
-              </Button>
-            )}
-            {tenant.status === 'active' && (
-              <Button onClick={handleSuspend} disabled={actionLoading !== null} size="sm" variant="outline">
-                {actionLoading === 'suspend' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Pause className="h-4 w-4 mr-2" />}
-                Suspend
-              </Button>
-            )}
-            <Link href={`/cp/tenants/${tenant.id}/edit`}>
-              <Button size="sm" variant="outline"><Edit className="h-4 w-4 mr-2" />Edit</Button>
-            </Link>
-            <Button onClick={handleDelete} disabled={actionLoading !== null} size="sm" variant="destructive">
-              {actionLoading === 'delete' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
-              Delete
-            </Button>
+    <DashboardLayout basePath="/cp" title={tenant.name} icon={<Building2 className="h-5 w-5" />}>
+      <div className="flex-1 bg-background flex flex-col overflow-hidden">
+        {/* Header */}
+        <TenantHeader
+          tenant={tenant}
+          onActivate={handleActivate}
+          onSuspend={handleSuspend}
+          onDelete={handleDelete}
+          actionLoading={actionLoading}
+          onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+          onToggleContextPanel={() => setContextPanelOpen(!contextPanelOpen)}
+          contextPanelOpen={contextPanelOpen}
+        />
+
+        {/* Main Content Area with Tabs */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Tabs and Content */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <TenantTabs
+              tabs={tabs}
+              defaultTab={activeTab}
+              onTabChange={setActiveTab}
+            />
           </div>
+
+          {/* Context Panel */}
+          <ContextPanel
+            tenant={tenant}
+            user={selectedUser}
+            isOpen={contextPanelOpen}
+            onClose={() => setContextPanelOpen(!contextPanelOpen)}
+          />
         </div>
-        <div className="px-6 py-6 max-w-4xl">
-          <div className="grid gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
-                <CardDescription>Tenant identification and status</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Name</label>
-                    <p className="text-sm font-medium mt-1">{tenant.name}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Status</label>
-                    <div className="mt-1">{getStatusBadge(tenant.status)}</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Hash className="h-3.5 w-3.5" />Slug</label>
-                    <p className="text-sm font-mono mt-1">{tenant.slug}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Hash className="h-3.5 w-3.5" />ID</label>
-                    <p className="text-sm font-mono mt-1">{tenant.id}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Database Information</CardTitle>
-                <CardDescription>Tenant database details</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Database className="h-3.5 w-3.5" />Database Name</label>
-                  <p className="text-sm font-mono mt-1">{tenant.dbName}</p>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Timestamps</CardTitle>
-                <CardDescription>Creation and update information</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Calendar className="h-3.5 w-3.5" />Created At</label>
-                    <p className="text-sm mt-1">{new Date(tenant.createdAt).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground flex items-center gap-2"><Calendar className="h-3.5 w-3.5" />Updated At</label>
-                    <p className="text-sm mt-1">{new Date(tenant.updatedAt).toLocaleString()}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+
+        {/* Command Palette */}
+        <CommandPalette
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          tenantId={tenant.id}
+          onAction={handleCommandAction}
+        />
       </div>
     </DashboardLayout>
   )

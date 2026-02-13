@@ -37,7 +37,6 @@ import { PlatformUsersModule } from '../platform-users/platform-users.module';
     AuthService,
     JwtStrategy,
     JwtRefreshStrategy,
-    TenantPrismaService,
   ],
   exports: [AuthService, JwtModule, PassportModule],
 })

@@ -36,7 +36,13 @@ export function Header({
     if (title) return title
     const parts = pathname?.split('/').filter(Boolean) || []
     if (parts.length > 1) {
-      return parts[parts.length - 1].charAt(0).toUpperCase() + parts[parts.length - 1].slice(1)
+      // Don't show UUIDs in breadcrumb - show a generic label instead
+      const lastPart = parts[parts.length - 1]
+      // Check if it's a UUID (36 characters with dashes)
+      if (lastPart.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        return 'Details'
+      }
+      return lastPart.charAt(0).toUpperCase() + lastPart.slice(1)
     }
     return 'Dashboard'
   }

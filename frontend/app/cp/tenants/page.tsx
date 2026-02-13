@@ -27,8 +27,11 @@ import {
   Play,
   Pause,
   Eye,
+  Filter,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/utils/date'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useRouter } from 'next/navigation'
 import {
@@ -40,6 +43,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/lib/hooks/use-toast'
 import { Input } from '@/components/ui/input'
+import { Pagination } from '@/components/ui/pagination'
 
 export default function CpTenantsPage() {
   const router = useRouter()
@@ -49,6 +53,9 @@ export default function CpTenantsPage() {
   const [error, setError] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<string[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<Tenant['status'] | 'all'>('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
 
   useEffect(() => {
     loadTenants()
@@ -73,6 +80,32 @@ export default function CpTenantsPage() {
     }
   }
 
+  const filteredTenants = tenants.filter((t) => {
+    // Status filter
+    if (statusFilter !== 'all' && t.status !== statusFilter) {
+      return false
+    }
+    
+    // Search filter
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      return t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)
+    }
+    
+    return true
+  })
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, statusFilter])
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredTenants.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedTenants = filteredTenants.slice(startIndex, endIndex)
+
   const toggleSelect = (id: string) => {
     setSelectedItems((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -80,10 +113,23 @@ export default function CpTenantsPage() {
   }
 
   const toggleSelectAll = () => {
-    if (selectedItems.length === tenants.length && tenants.length > 0) {
-      setSelectedItems([])
+    const visibleIds = paginatedTenants.map((item) => item.id)
+    const allVisibleSelected = visibleIds.every((id) => selectedItems.includes(id))
+    
+    if (allVisibleSelected) {
+      // Deselect all visible items
+      setSelectedItems((prev) => prev.filter((id) => !visibleIds.includes(id)))
     } else {
-      setSelectedItems(tenants.map((item) => item.id))
+      // Select all visible items (merge with existing selections)
+      setSelectedItems((prev) => {
+        const newSelection = [...prev]
+        visibleIds.forEach((id) => {
+          if (!newSelection.includes(id)) {
+            newSelection.push(id)
+          }
+        })
+        return newSelection
+      })
     }
   }
 
@@ -136,30 +182,121 @@ export default function CpTenantsPage() {
     )
   }
 
-  const filteredTenants = tenants.filter((t) => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q) || t.id.toLowerCase().includes(q)
-  })
+  const statusCounts = {
+    all: tenants.length,
+    active: tenants.filter((t) => t.status === 'active').length,
+    suspended: tenants.filter((t) => t.status === 'suspended').length,
+    provisioning: tenants.filter((t) => t.status === 'provisioning').length,
+    deleted: tenants.filter((t) => t.status === 'deleted').length,
+  }
 
   return (
     <DashboardLayout basePath="/cp" title="Tenants" itemCount={filteredTenants.length} icon={<Building2 className="h-5 w-5" />}>
       <div className="flex-1 bg-background">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-          <div className="flex-1 relative max-w-md">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <Input
-              type="text"
-              placeholder="Search tenants..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-9"
-            />
+        <div className="px-6 py-4 border-b border-border space-y-4">
+          {/* Search and Actions Row */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 relative max-w-md">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Search tenants..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+            <Button onClick={() => router.push('/cp/tenants/new')} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Tenant
+            </Button>
           </div>
-          <Button onClick={() => router.push('/cp/tenants/new')} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Tenant
-          </Button>
+
+          {/* Status Filter Row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              <span>Status:</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant={statusFilter === 'all' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('all')}
+                className="h-8"
+              >
+                All
+                {statusCounts.all > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-background/50 rounded">
+                    {statusCounts.all}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={statusFilter === 'active' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('active')}
+                className="h-8"
+              >
+                Active
+                {statusCounts.active > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-background/50 rounded">
+                    {statusCounts.active}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={statusFilter === 'suspended' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('suspended')}
+                className="h-8"
+              >
+                Suspended
+                {statusCounts.suspended > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-background/50 rounded">
+                    {statusCounts.suspended}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={statusFilter === 'provisioning' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('provisioning')}
+                className="h-8"
+              >
+                Provisioning
+                {statusCounts.provisioning > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-background/50 rounded">
+                    {statusCounts.provisioning}
+                  </span>
+                )}
+              </Button>
+              <Button
+                variant={statusFilter === 'deleted' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setStatusFilter('deleted')}
+                className="h-8"
+              >
+                Deleted
+                {statusCounts.deleted > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-background/50 rounded">
+                    {statusCounts.deleted}
+                  </span>
+                )}
+              </Button>
+              {statusFilter !== 'all' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setStatusFilter('all')}
+                  className="h-8"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
 
         {error && (
@@ -197,7 +334,10 @@ export default function CpTenantsPage() {
                   <TableRow className="border-b border-border hover:bg-transparent">
                     <TableHead className="w-12 h-12 px-4">
                       <Checkbox
-                        checked={filteredTenants.length > 0 && selectedItems.length === filteredTenants.length}
+                        checked={
+                          paginatedTenants.length > 0 &&
+                          paginatedTenants.every((tenant) => selectedItems.includes(tenant.id))
+                        }
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
@@ -211,7 +351,7 @@ export default function CpTenantsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTenants.map((tenant) => (
+                  {paginatedTenants.map((tenant) => (
                     <TableRow
                       key={tenant.id}
                       className={cn(
@@ -246,7 +386,7 @@ export default function CpTenantsPage() {
                       </TableCell>
                       <TableCell className="h-12 px-4">
                         <span className="text-muted-foreground text-sm">
-                          {new Date(tenant.createdAt).toLocaleDateString()}
+                          {formatDateOnly(tenant.createdAt)}
                         </span>
                       </TableCell>
                       <TableCell className="h-12 px-4" onClick={(e) => e.stopPropagation()}>
@@ -293,6 +433,21 @@ export default function CpTenantsPage() {
                 </TableBody>
               </Table>
             </div>
+            
+            {/* Pagination */}
+            {filteredTenants.length > 0 && (
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={filteredTenants.length}
+                onItemsPerPageChange={(newItemsPerPage) => {
+                  setItemsPerPage(newItemsPerPage)
+                  setCurrentPage(1)
+                }}
+              />
+            )}
           </div>
         )}
       </div>

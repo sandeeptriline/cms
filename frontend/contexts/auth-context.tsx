@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string, tenantId: string) => Promise<void>
+  login: (email: string, password: string, tenantId?: string) => Promise<void>
   platformAdminLogin: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, tenantId: string) => Promise<void>
   logout: () => Promise<void>
@@ -59,17 +59,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = useCallback(
-    async (email: string, password: string, tenantId: string) => {
+    async (email: string, password: string, tenantId?: string) => {
       try {
-        const response: AuthResponse = await authApi.login({ email, password }, tenantId)
+        let response: AuthResponse
         
-        // Store tokens and tenant ID
+        if (tenantId) {
+          // Legacy: Login with tenant ID (uses /auth/login/tenant endpoint)
+          response = await authApi.loginWithTenant({ email, password }, tenantId)
+        } else {
+          // New: Email-only login (automatically finds tenant)
+          response = await authApi.login({ email, password })
+        }
+        
+        // Extract tenant ID from response (can be null for Super Admin)
+        const userTenantId = response.user.tenantId || tenantId || null
+
+        // Store tokens
         localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
         localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
-        localStorage.setItem(TENANT_ID_KEY, tenantId)
+        
+        // Store tenant ID only if it exists (not for Super Admin)
+        if (userTenantId) {
+          localStorage.setItem(TENANT_ID_KEY, userTenantId)
+        } else {
+          localStorage.removeItem(TENANT_ID_KEY)
+        }
 
         // Set user (map API response to User type)
-        setUser(mapAuthResponseToUser(response.user, tenantId))
+        setUser(mapAuthResponseToUser(response.user, userTenantId))
 
         toast({
           title: 'Success',

@@ -1,0 +1,46 @@
+# Database Configuration
+# DATABASE_URL=mysql://cms_user:Admin%40123%21Secure@localhost:3306/cms_platform
+DATABASE_URL=mysql://root:Admin%40123%21Secure@localhost:3306/cms_platform
+TENANT_DATABASE_PREFIX=cms_tenant_
+DB_POOL_MIN=2
+DB_POOL_MAX=10
+
+# MySQL Root Connection (for tenant provisioning)
+MYSQL_ROOT_URL=mysql://root:Sandeep%40123%21@localhost:3306
+
+# JWT Authentication
+JWT_SECRET=khDfrefZ5ZmLLg1ATvP8fYiJVWLT+puGi3QmLMbtKv0=
+JWT_EXPIRES_IN=7d
+JWT_REFRESH_SECRET=cPAr49tf7fv49D467ydG3K44WggUIyFDUJpBjXA16oY=
+JWT_REFRESH_EXPIRES_IN=30d
+
+# Application
+NODE_ENV=development
+PORT=3001
+API_PREFIX=/api/v1
+CORS_ORIGIN=http://localhost:3000
+APP_URL=http://localhost:3000
+API_URL=http://localhost:3001
+
+# Platform Admin
+PLATFORM_ADMIN_EMAIL=admin@example.com
+PLATFORM_ADMIN_PASSWORD=ChangeThisPassword123!
+
+# Security
+SESSION_SECRET=jfv47nOaasSgmhg5oXkRbg/+Xy/C9VV9g3obhY6qMXU=
+BCRYPT_ROUNDS=10
+
+# File Storage
+STORAGE_TYPE=local
+STORAGE_LOCAL_PATH=./storage/uploads
+
+# Email
+EMAIL_PROVIDER=console
+
+# Logging
+LOG_LEVEL=debug
+LOG_FORMAT=json
+
+# Rate Limiting
+RATE_LIMIT_TTL=60
+RATE_LIMIT_MAX=100

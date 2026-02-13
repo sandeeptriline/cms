@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { tenants_status } from '@prisma/client';
 import { DatabaseValidator } from '../../common/utils/database-validator';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class TenantProvisioningService {
@@ -315,6 +316,23 @@ export class TenantProvisioningService {
 
     try {
       await this.prisma.$executeRawUnsafe(`USE \`${sanitizedDbName}\``);
+
+      // Create default project if none exists
+      const existingProjects = await this.prisma.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM projects LIMIT 1`
+      );
+
+      if (existingProjects.length === 0) {
+        const defaultProjectId = uuidv4();
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO projects (id, name, slug, config, feature_flags, created_at, updated_at)
+           VALUES (?, ?, ?, '{}', '{}', NOW(), NOW())`,
+          defaultProjectId,
+          'Default Project',
+          'default'
+        );
+        this.logger.log(`Default project created for tenant ${tenantId}`);
+      }
 
       // Insert default schema (e.g., "Page" content type)
       // This is optional - can be done later via API

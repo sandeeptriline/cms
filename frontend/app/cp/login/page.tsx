@@ -14,7 +14,7 @@ import { ShieldCheck } from 'lucide-react'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  password: z.string().min(1, 'Password is required'),
 })
 
 type LoginFormData = z.infer<typeof loginSchema>
@@ -44,9 +44,26 @@ export default function CpLoginPage() {
 
     try {
       await platformAdminLogin(data.email, data.password)
+      // Redirect after successful login
       router.push('/cp')
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Login failed. Please try again.'
+    } catch (err: any) {
+      console.error('Login error:', err)
+      
+      // Extract error message
+      let message = 'Login failed. Please try again.'
+      
+      if (err?.response?.data?.message) {
+        message = err.response.data.message
+      } else if (err?.message) {
+        message = err.message
+      } else if (err?.response?.status === 401) {
+        message = 'Invalid email or password'
+      } else if (err?.response?.status === 0 || err?.code === 'ERR_NETWORK') {
+        message = 'Cannot connect to server. Please check if the backend is running.'
+      } else if (err?.response?.status >= 500) {
+        message = 'Server error. Please try again later.'
+      }
+      
       setError(message)
     } finally {
       setIsLoading(false)

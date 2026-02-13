@@ -3,36 +3,43 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
-  LayoutDashboard, 
-  FileText, 
-  Box, 
-  Image, 
-  Settings,
-  Users,
   Search,
-  Bell,
   User,
   LogOut,
-  Database,
   ChevronLeft,
   ChevronRight,
-  FileStack,
-  Navigation,
-  Globe,
-  ArrowLeftRight,
-  Sparkles,
+  LayoutDashboard,
+  Settings,
+  Bell,
+  Database,
+  Folder,
+  Image,
+  BarChart2,
+  Puzzle,
+  FileText,
+  GitBranch,
+  Lock,
+  Palette,
+  Bookmark,
   Languages,
-  FolderTree,
-  Plus,
-  Pencil,
-  HelpCircle,
-  BarChart3,
-  Package,
-  Building2
+  Sparkles,
+  Store,
+  FileCode,
+  Bug,
+  Lightbulb,
+  Info,
+  Users,
+  Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
 import { isSuperAdmin } from '@/lib/utils/roles'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,63 +48,84 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { BookOpen, Palette, Layers } from 'lucide-react'
+import {
+  superAdminMenuItems,
+  getTenantUserMenuItems,
+  superAdminIconItems,
+  getTenantUserIconItems,
+  settingsSubmenuItems,
+  type MenuItem,
+  type SettingsMenuItem,
+} from '@/lib/utils/menu-items'
 
-// Platform Admin Navigation (Super Admin only) - hrefs are relative to basePath
-const platformAdminNavItems = [
-  { name: 'Tenants', path: '/tenants', icon: Building2 },
-  { name: 'Schema Library', path: '/platform/schema-library', icon: Database },
-  { name: 'Content Library', path: '/platform/content-library', icon: BookOpen },
-  { name: 'Component Library', path: '/platform/component-library', icon: Layers },
-  { name: 'Theme Library', path: '/platform/theme-library', icon: Palette },
-  { name: 'Settings', path: '/platform/settings', icon: Settings },
-]
-
-// Tenant Admin Navigation (Regular users)
-const tenantAdminNavigation = [
-  { name: 'Content Types', href: '/dashboard/content-types', icon: Database },
-  { name: 'Pages', href: '/dashboard/pages', icon: FileText },
-  { name: 'Blocks', href: '/dashboard/blocks', icon: Box },
-  { name: 'Media', href: '/dashboard/media', icon: Image },
-  { name: 'Users', href: '/dashboard/users', icon: Users },
-  { name: 'Navigation', href: '/dashboard/navigation', icon: Navigation },
-  { name: 'Globals', href: '/dashboard/globals', icon: Globe },
-  { name: 'Redirects', href: '/dashboard/redirects', icon: ArrowLeftRight },
-  { name: 'Languages', href: '/dashboard/languages', icon: Languages },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-]
-
-// Icon-only sidebar navigation (leftmost narrow strip)
-const iconSidebarItems = [
-  { icon: Plus, href: '/dashboard/new', title: 'Create New' },
-  { icon: Package, href: '/dashboard/collections', title: 'Collections' },
-  { icon: Pencil, href: '/dashboard/design', title: 'Design' },
-  { icon: Users, href: '/dashboard/users', title: 'Users' },
-  { icon: FolderTree, href: '/dashboard/files', title: 'Files' },
-  { icon: BarChart3, href: '/dashboard/insights', title: 'Insights' },
-  { icon: HelpCircle, href: '/dashboard/help', title: 'Help' },
-  { icon: Settings, href: '/dashboard/settings', title: 'Settings' },
-]
+export interface SecondarySidebarItem {
+  id: string
+  name: string
+  path?: string
+  href?: string
+  icon?: string | React.ComponentType<{ className?: string }>
+  color?: string
+  itemCount?: number
+  hasChildren?: boolean
+  children?: SecondarySidebarItem[]
+  indent?: boolean
+  divider?: boolean
+  section?: string
+}
 
 interface SidebarProps {
   isCollapsed: boolean
   onToggle: () => void
   /** Base path (e.g. "/cp" or "/dashboard"). Nav items use this prefix. */
   basePath?: string
+  /** Secondary sidebar items (passed from page components, like Directus) */
+  secondarySidebarItems?: SecondarySidebarItem[]
+  /** Show secondary sidebar */
+  showSecondarySidebar?: boolean
 }
 
-export function Sidebar({ isCollapsed, onToggle, basePath = '/dashboard' }: SidebarProps) {
+export function Sidebar({ 
+  isCollapsed, 
+  onToggle, 
+  basePath = '/dashboard',
+  secondarySidebarItems = [],
+  showSecondarySidebar = true,
+}: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
 
-  // Determine if user is Super Admin; when under /cp, always show platform admin nav
+  // Determine if user is Super Admin
+  // Super Admin uses /cp routes, tenant users use /dashboard routes
   const isPlatformAdmin = isSuperAdmin(user?.roles) || pathname?.startsWith('/cp')
-  const platformAdminNavigation = platformAdminNavItems.map((item) => ({
-    ...item,
-    href: `${basePath}${item.path}`,
-  }))
-  const navigation = isPlatformAdmin ? platformAdminNavigation : tenantAdminNavigation
+  
+  // Get appropriate menu items based on user type
+  let navigation: Array<MenuItem & { href: string }>
+  let iconItems: Array<{ icon: React.ComponentType<{ className?: string }>; href: string; title: string }>
+  
+  if (isPlatformAdmin) {
+    // Super Admin menu
+    navigation = superAdminMenuItems.map((item) => ({
+      ...item,
+      href: item.path, // Already includes /cp prefix
+    }))
+    iconItems = superAdminIconItems
+  } else {
+    // Tenant user menu (dynamic based on roles)
+    const tenantMenuItems = getTenantUserMenuItems(user?.roles)
+    navigation = tenantMenuItems.map((item) => ({
+      ...item,
+      href: item.path, // Already includes /dashboard prefix
+    }))
+    iconItems = getTenantUserIconItems(user?.roles)
+  }
+
+  // Directus pattern: Simple active state check using pathname.startsWith()
+  // No complex section detection needed - each icon checks if pathname starts with its path
+
+  // Auto-expand sidebar when any primary icon is active (Directus behavior)
+  // Sidebar should be visible when not explicitly collapsed
+  const shouldShowSidebar = !isCollapsed
 
   const handleLogout = async () => {
     try {
@@ -124,176 +152,351 @@ export function Sidebar({ isCollapsed, onToggle, basePath = '/dashboard' }: Side
   }
 
   return (
-    <div className="flex h-screen">
-      {/* Layer 1: Narrow Icon-Only Sidebar (Leftmost) - Always Visible */}
-      <div className="flex flex-col w-14 bg-sidebar-bg border-r border-sidebar-border">
-        {/* Logo/Brand Icon */}
-        <div className="flex items-center justify-center h-14 border-b border-sidebar-border">
-          <Link href={basePath} className="flex items-center justify-center w-10 h-10 rounded bg-primary/10 hover:bg-primary/20 transition-colors">
-            <span className="text-xs font-bold text-primary">CMS</span>
-          </Link>
-        </div>
-
-        {/* Icon Navigation */}
-        <nav className="flex-1 py-2 space-y-1 overflow-y-auto">
-          {iconSidebarItems.map((item) => {
-            const Icon = item.icon
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-            
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.title}
-                className={cn(
-                  'flex items-center justify-center w-10 h-10 mx-auto rounded-md transition-colors',
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-sidebar-foreground/60 hover:bg-sidebar-hover hover:text-sidebar-foreground'
-                )}
-              >
-                <Icon className="h-4 w-4" />
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* Bottom Section - Toggle Button and User Profile */}
-        <div className="border-t border-sidebar-border py-2 space-y-1">
-          {/* Toggle Button - Always visible in narrow sidebar */}
-          <button
-            onClick={onToggle}
-            className="flex items-center justify-center w-10 h-10 mx-auto rounded-md text-sidebar-foreground/60 hover:bg-sidebar-hover hover:text-sidebar-foreground transition-colors"
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+    <TooltipProvider delayDuration={100}>
+      <div className="flex h-screen">
+        {/* Layer 1: Narrow Icon-Only Sidebar (Directus Style) - Always Visible */}
+        <div className="flex flex-col w-[52px] h-screen bg-[#6644FF] fixed left-0 top-0 z-50 shadow-lg">
+          {/* Logo/Brand Icon - Directus Style */}
+          <div 
+            onClick={() => router.push(basePath)}
+            className="flex items-center justify-center h-[52px] cursor-pointer hover:bg-white/10 transition-colors"
           >
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </button>
+            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
+              <Database className="w-5 h-5 text-[#6644FF]" />
+            </div>
+          </div>
 
-          {/* User Profile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center justify-center w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 transition-colors border border-primary/30 shadow-sm"
-                title={user?.name || 'User'}
-              >
-                <span className="text-[10px] text-white font-semibold">
-                  {getUserInitials()}
-                </span>
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="right" className="w-56">
-              <DropdownMenuLabel>
-                <div className="flex flex-col space-y-0.5">
-                  <p className="text-sm font-medium">{user?.name || 'User'}</p>
-                  <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/profile" className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
+          {/* Icon Navigation - Directus Style */}
+          <nav className="flex-1 flex flex-col items-center pt-2 space-y-1">
+            {iconItems.map((item) => {
+              const Icon = item.icon
+              // Determine which section this icon belongs to based on href
+              const itemSection = item.href === '/dashboard/settings' || item.href === '/cp/settings' ? 'settings' :
+                                 item.href === '/dashboard/files' || item.href === '/cp/files' ? 'files' :
+                                 item.href === '/dashboard/explore' || item.href === '/cp/explore' ? 'explore' :
+                                 item.href === '/dashboard/insights' || item.href === '/cp/insights' ? 'insights' :
+                                 item.href === '/dashboard/documentation' || item.href === '/cp/documentation' ? 'documentation' :
+                                 item.href === '/dashboard/users' || item.href === '/cp/users' ? 'users' :
+                                 item.href === '/dashboard/extensions' || item.href === '/cp/extensions' ? 'extensions' :
+                                 'content'
+              
+              // Active state for primary icons (Directus behavior):
+              // 1. Exact pathname match
+              // 2. Pathname starts with item href + '/' (but not if it's a more specific section)
+              // 3. Active section matches this item's section
+              // Special case: /dashboard should not be active when on /dashboard/settings/*
+              let isActive = false
+              if (pathname === item.href) {
+                isActive = true
+              } else if (item.href === '/dashboard' || item.href === '/cp') {
+                // Content icon: only active if on exact path or content pages (not settings/files/etc)
+                isActive = (pathname === item.href || 
+                           (pathname?.startsWith(item.href + '/') && 
+                            !pathname?.startsWith(item.href + '/settings') &&
+                            !pathname?.startsWith(item.href + '/files') &&
+                            !pathname?.startsWith(item.href + '/explore') &&
+                            !pathname?.startsWith(item.href + '/insights') &&
+                            !pathname?.startsWith(item.href + '/documentation') &&
+                            !pathname?.startsWith(item.href + '/users') &&
+                            !pathname?.startsWith(item.href + '/extensions')))
+              } else {
+                // Other icons: active if pathname starts with href
+                isActive = pathname?.startsWith(item.href + '/')
+              }
+              
+              return (
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => {
+                        router.push(item.href)
+                        // Auto-expand sidebar when clicking primary icon (Directus behavior)
+                        if (isCollapsed) {
+                          onToggle()
+                        }
+                      }}
+                      className={cn(
+                        'w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200',
+                        isActive
+                          ? 'bg-white/20 text-white'
+                          : 'text-white/70 hover:bg-white/10 hover:text-white'
+                      )}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="bg-[#2D3748] text-white border-0 text-xs">
+                    {item.title}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            })}
+          </nav>
+
+          {/* Bottom Navigation - Directus Style */}
+          <div className="flex flex-col items-center pb-3 space-y-1">
+            {/* Notifications */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="w-10 h-10 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200"
+                >
+                  <Bell className="w-5 h-5" strokeWidth={1.5} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="bg-[#2D3748] text-white border-0 text-xs">
+                Notifications
+              </TooltipContent>
+            </Tooltip>
+
+            {/* User Profile */}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <button className="w-10 h-10 flex items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200">
+                      <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                        <span className="text-[10px] text-white font-semibold">
+                          {getUserInitials()}
+                        </span>
+                      </div>
+                    </button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-[#2D3748] text-white border-0 text-xs">
                   Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/settings" className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      {/* Layer 2: Main Sidebar (Expandable/Collapsible) */}
-      <div
-        className={cn(
-          'flex h-screen flex-col border-r border-sidebar-border bg-sidebar-bg transition-all duration-300 ease-in-out overflow-hidden',
-          isCollapsed ? 'w-0' : 'w-64'
-        )}
-      >
-        {/* Logo/Brand - Directus style */}
-        <div className="border-b border-sidebar-border px-4 py-3">
-          <Link 
-            href={basePath} 
-            className="flex items-center gap-2.5 group"
-          >
-            <div className="h-7 w-7 rounded bg-primary/10 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-              <span className="text-xs font-bold text-primary">CMS</span>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-semibold text-sidebar-foreground leading-tight">CMS Platform</span>
-              <span className="text-xs text-sidebar-foreground/60 leading-tight truncate">Multi-tenant CMS</span>
-            </div>
-          </Link>
-        </div>
-
-        {/* Global Search - Directus style */}
-        <div className="border-b border-sidebar-border px-4 py-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-sidebar-foreground/40 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Global Search"
-              className="w-full rounded-md border-0 bg-background/50 px-2.5 py-1.5 pl-8 pr-16 text-xs text-sidebar-foreground placeholder:text-sidebar-foreground/40 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:bg-background transition-all"
-            />
-            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-sidebar-foreground/30 font-medium">
-              Ctrl+K
-            </span>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="start" side="right" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-0.5">
+                    <p className="text-sm font-medium">{user?.name || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+                    {isPlatformAdmin && (
+                      <p className="text-xs text-primary font-medium mt-0.5">Super Admin</p>
+                    )}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {isPlatformAdmin ? (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/cp/settings" className="cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Platform Settings
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/profile" className="cursor-pointer">
+                        <User className="mr-2 h-4 w-4" />
+                        Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/dashboard/settings" className="cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
-        {/* Navigation - Directus style with Radix UI patterns */}
-        <nav className="flex-1 space-y-0.5 py-2 overflow-y-auto overflow-x-hidden px-2">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-            const Icon = item.icon
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                title={item.name}
-                className={cn(
-                  'group flex items-center gap-2.5 px-2.5 py-2 mx-1 rounded-md text-sm transition-all duration-150',
-                  isActive
-                    ? 'bg-sidebar-active-bg text-sidebar-active-text font-semibold'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-hover hover:text-sidebar-foreground font-normal'
-                )}
-              >
-                <Icon className={cn(
-                  'flex-shrink-0 h-4 w-4 transition-colors',
-                  isActive 
-                    ? 'text-sidebar-active-text' 
-                    : 'text-sidebar-foreground/60 group-hover:text-sidebar-foreground'
-                )} />
-                <span className={cn(
-                  'truncate leading-tight flex-1 text-sm',
-                  isActive 
-                    ? 'text-sidebar-active-text font-semibold' 
-                    : 'text-sidebar-foreground/80 font-normal'
-                )}>
-                  {item.name}
-                </span>
-                {isActive && (
-                  <ChevronRight className="h-3.5 w-3.5 text-sidebar-foreground/50 flex-shrink-0" />
-                )}
-              </Link>
-            )
-          })}
-        </nav>
+        {/* Layer 2: Main Sidebar (Expandable/Collapsible) - Directus Style */}
+        {showSecondarySidebar && (
+          <div
+            className={cn(
+              'flex h-screen flex-col border-r border-gray-200 bg-[#F8F9FC] transition-all duration-300 ease-in-out overflow-hidden fixed left-[52px] top-0 z-40',
+              shouldShowSidebar ? 'w-[220px]' : 'w-0'
+            )}
+          >
+            {/* Project Header - Directus Style */}
+            <div className="px-4 py-3 border-b border-gray-200">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-[#172940] text-sm truncate">
+                  {isPlatformAdmin ? 'Platform Admin' : 'Tenant Dashboard'}
+                </h2>
+              </div>
+              <p className="text-xs text-[#6644FF] truncate">
+                {isPlatformAdmin ? 'Multi-tenant CMS' : 'Content Management'}
+              </p>
+            </div>
 
+            {/* Global Search - Directus Style */}
+            <div className="p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Global Search"
+                  className="w-full rounded-md border border-gray-200 bg-white px-2.5 py-1.5 pl-9 pr-12 h-8 text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#6644FF] focus:border-[#6644FF] transition-all"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 bg-gray-100 px-1 rounded">
+                  Ctrl+K
+                </span>
+              </div>
+            </div>
+
+            {/* Navigation - Directus Style: Use secondarySidebarItems from props */}
+            <nav className="flex-1 overflow-y-auto px-2 pb-4">
+              {secondarySidebarItems.length > 0 ? (
+                secondarySidebarItems.map((item, index) => {
+                  // Handle dividers - render as separator, not a link
+                  if (item.divider) {
+                    return <div key={item.id || `divider-${index}`} className="h-px bg-gray-200 my-2 mx-2" />
+                  }
+
+                  // Get icon component (can be string name or React component)
+                  let IconComponent: React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }> | null = null
+                  if (typeof item.icon === 'string') {
+                    // Import icon by name (similar to Directus)
+                    const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>> = {
+                      Database, Folder, Image, Search, BarChart2, Users, Puzzle, Settings,
+                      GitBranch, Lock, Palette, Bookmark, Languages, Sparkles, Store,
+                      FileCode, Bug, Lightbulb, Info, FileText, Shield,
+                    }
+                    IconComponent = iconMap[item.icon] || Folder
+                  } else if (item.icon) {
+                    IconComponent = item.icon as React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>
+                  } else {
+                    IconComponent = Folder
+                  }
+
+                  // Determine href (use path or href)
+                  const itemHref = item.href || item.path || ''
+                  
+                  // Directus pattern: Active if pathname includes item.id OR pathname starts with item path
+                  const isActive = pathname?.includes(item.id) || 
+                                 (itemHref && pathname?.startsWith(itemHref)) ||
+                                 false
+
+                  // Handle items with children (expandable)
+                  const hasChildren = item.hasChildren && item.children && item.children.length > 0
+                  
+                  return (
+                    <div key={item.id || `item-${index}`}>
+                      <button
+                        onClick={() => {
+                          if (hasChildren) {
+                            // Toggle expand (would need state management)
+                            // For now, just navigate
+                            if (itemHref) router.push(itemHref)
+                          } else {
+                            // Navigate to item path
+                            if (itemHref) {
+                              router.push(itemHref)
+                            } else if (item.id) {
+                              // Fallback: navigate to /content/{id} or /dashboard/{id}
+                              router.push(`${basePath}/${item.id}`)
+                            }
+                          }
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 text-left transition-all duration-150',
+                          isActive
+                            ? 'bg-[#EDE9FE] text-[#6644FF]'
+                            : 'text-gray-700 hover:bg-gray-100',
+                          item.indent ? 'ml-4' : ''
+                        )}
+                      >
+                        {hasChildren && (
+                          <ChevronRight className="w-3 h-3 text-gray-400" />
+                        )}
+                        {IconComponent && (
+                          <IconComponent 
+                            className="w-4 h-4 flex-shrink-0" 
+                            style={{ color: item.color || (isActive ? '#6644FF' : '#9CA3AF') }}
+                            strokeWidth={1.5}
+                          />
+                        )}
+                        <span className="text-sm truncate flex-1">{item.name}</span>
+                        {item.itemCount !== undefined && item.itemCount > 0 && (
+                          <span className="text-xs text-gray-400">{item.itemCount}</span>
+                        )}
+                      </button>
+                      {/* Render children if expanded (would need state) */}
+                    </div>
+                  )
+                })
+              ) : (
+                // Fallback: Show settings submenu if on settings page and no items provided
+                (pathname?.startsWith('/dashboard/settings') || pathname?.startsWith('/cp/settings')) && !isPlatformAdmin ? (
+                  settingsSubmenuItems
+                    .filter(item => {
+                      if (!item.requiredRoles || item.requiredRoles.length === 0) return true
+                      return item.requiredRoles.some(role => 
+                        user?.roles?.some(userRole => userRole.toLowerCase() === role.toLowerCase())
+                      )
+                    })
+                    .map((item, index) => {
+                      if (item.divider) {
+                        return <div key={`divider-${index}`} className="h-px bg-gray-200 my-2 mx-2" />
+                      }
+                      const Icon = item.icon
+                      const itemHref = item.path || ''
+                      const isActive = pathname === itemHref || pathname?.startsWith(itemHref + '/')
+                      
+                      if (!itemHref) return null
+                      
+                      return (
+                        <Link
+                          key={item.id || item.path || `nav-${index}`}
+                          href={itemHref}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 text-left transition-all duration-150',
+                            isActive
+                              ? 'bg-[#EDE9FE] text-[#6644FF]'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          )}
+                        >
+                          <Icon 
+                            className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-[#6644FF]" : "text-[#9CA3AF]")}
+                          />
+                          <span className="text-sm truncate flex-1">{item.name}</span>
+                        </Link>
+                      )
+                    })
+                ) : (
+                  // Show main navigation as fallback
+                  navigation.map((item, index) => {
+                    const Icon = item.icon
+                    const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                    
+                    return (
+                      <Link
+                        key={item.path || `nav-${index}`}
+                        href={item.href}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 text-left transition-all duration-150',
+                          isActive
+                            ? 'bg-[#EDE9FE] text-[#6644FF]'
+                            : 'text-gray-700 hover:bg-gray-100'
+                        )}
+                      >
+                        <Icon 
+                          className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-[#6644FF]" : "text-[#9CA3AF]")}
+                        />
+                        <span className="text-sm truncate flex-1">{item.name}</span>
+                      </Link>
+                    )
+                  })
+                )
+              )}
+            </nav>
+          </div>
+        )}
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

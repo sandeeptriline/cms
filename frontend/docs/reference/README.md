@@ -1,44 +1,40 @@
 # Reference Documentation
 
-**Last Updated**: 2026-02-11
+**Last Updated**: 2026-02-13
 
 ---
 
 ## Overview
 
-This section contains references to shared project documentation and design specifications that are relevant for admin panel development.
+This section contains references to shared project documentation and design specifications that are relevant for frontend development.
 
 ---
 
 ## 📚 Shared Documentation
 
 ### Core Requirements
-- **[Requirements](../docs/requirements.md)** - Complete functional requirements
-- **[Platform Requirements](../docs/platform-requirements.md)** - Technical specifications
-- **[Decisions Summary](../docs/decisions-summary.md)** - Key technical decisions
+- **[Requirements](../../docs/core/requirements.md)** - Complete functional requirements
+- **[Platform Requirements](../../docs/reference/platform-requirements.md)** - Technical specifications
+- **[Decisions Summary](../../docs/reference/decisions-summary.md)** - Key technical decisions
 
 ### Design & UI
-- **[UI Design](../docs/UI-DESIGN.md)** - Complete UI design specification (Directus-inspired)
-- **[Project Structure](../docs/project-structure.md)** - Project structure and organization
+- **[UI Design](../../docs/core/UI-DESIGN.md)** - Complete UI design specification (Directus-inspired)
+- **[Project Structure](../../docs/reference/project-structure.md)** - Project structure and organization
 
 ### Development
-- **[Development Phases](../docs/development-phases-backend-frontend.md)** - Overall development roadmap
-- **[Development Readiness](../docs/development-readiness.md)** - Pre-development checklist
-- **[Start Here](../docs/START-HERE.md)** - Getting started guide
+- **[Development Phases](../../docs/reference/development-phases-backend-frontend.md)** - Overall development roadmap
+- **[Development Status](../../docs/development-guides/DEVELOPMENT_STATUS.md)** - Current implementation status
+- **[Start Here](../../docs/development-guides/START-HERE.md)** - Getting started guide
 
 ### Database
-- **[Platform Database Schema](../docs/platform-db.sql)** - Platform database structure
-- **[Tenant Database Schema](../docs/tenant-db.sql)** - Tenant database structure
-
-### Configuration
-- **[Backend Environment Template](../docs/env-template-backend.md)** - Backend env variables
-- **[Frontend Environment Template](../docs/env-template-frontend.md)** - Frontend env variables
+- **[Platform Database Schema](../../docs/core/platform-db.sql)** - Platform database structure
+- **[Tenant Database Schema](../../docs/core/tenant-db.sql)** - Tenant database structure
 
 ---
 
 ## 🎨 UI Design Reference
 
-The admin panel follows the design patterns specified in **[UI-DESIGN.md](../../../docs/UI-DESIGN.md)**:
+The admin panel follows the design patterns specified in **[UI-DESIGN.md](../../docs/core/UI-DESIGN.md)**:
 
 ### Key Design Principles
 - **Clarity**: One primary action per screen
@@ -61,14 +57,14 @@ The admin panel follows the design patterns specified in **[UI-DESIGN.md](../../
 ## 📋 Quick Links
 
 ### For Developers
-- [UI Design Specification](../../../docs/UI-DESIGN.md) - Complete UI/UX guide
-- [Requirements](../../../docs/requirements.md) - Feature requirements
-- [Project Structure](../../../docs/project-structure.md) - Code organization
+- [UI Design Specification](../../docs/core/UI-DESIGN.md) - Complete UI/UX guide
+- [Requirements](../../docs/core/requirements.md) - Feature requirements
+- [Project Structure](../../docs/reference/project-structure.md) - Code organization
 
 ### For Designers
-- [UI Design Specification](../../../docs/UI-DESIGN.md) - Design patterns and components
-- [Platform Requirements](../../../docs/platform-requirements.md) - Technical constraints
+- [UI Design Specification](../../docs/core/UI-DESIGN.md) - Design patterns and components
+- [Platform Requirements](../../docs/reference/platform-requirements.md) - Technical constraints
 
 ---
 
-**Note**: All shared documentation is located in the root `docs/` folder. This reference section provides quick access to relevant documents for admin panel development.
+**Note**: All shared documentation is located in the root `docs/` folder. This reference section provides quick access to relevant documents for frontend development.

@@ -48,10 +48,14 @@ function normalizeTenant(raw: Record<string, unknown>): Tenant {
     apiCallsLimit: (raw.apiCallsLimit ?? raw.api_calls_limit) as number | null | undefined,
     usersCount: (raw.usersCount ?? raw.users_count) as number | null | undefined,
     usersLimit: (raw.usersLimit ?? raw.users_limit) as number | null | undefined,
-    lastActivityAt: (raw.lastActivityAt ?? (raw.last_activity_at != null ? String(raw.last_activity_at) : null)) as string | null | undefined,
-    provisionedAt: (raw.provisionedAt ?? (raw.provisioned_at != null ? String(raw.provisioned_at) : null)) as string | null | undefined,
-    createdAt: String(raw.createdAt ?? raw.created_at),
-    updatedAt: String(raw.updatedAt ?? raw.updated_at),
+    lastActivityAt: (raw.lastActivityAt ?? (raw.last_activity_at != null ? (typeof raw.last_activity_at === 'string' ? raw.last_activity_at : new Date(raw.last_activity_at).toISOString()) : null)) as string | null | undefined,
+    provisionedAt: (raw.provisionedAt ?? (raw.provisioned_at != null ? (typeof raw.provisioned_at === 'string' ? raw.provisioned_at : new Date(raw.provisioned_at).toISOString()) : null)) as string | null | undefined,
+    createdAt: typeof (raw.createdAt ?? raw.created_at) === 'string' 
+      ? (raw.createdAt ?? raw.created_at) as string
+      : new Date(raw.createdAt ?? raw.created_at).toISOString(),
+    updatedAt: typeof (raw.updatedAt ?? raw.updated_at) === 'string'
+      ? (raw.updatedAt ?? raw.updated_at) as string
+      : new Date(raw.updatedAt ?? raw.updated_at).toISOString(),
   }
 }
 

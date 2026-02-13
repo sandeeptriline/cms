@@ -5,6 +5,7 @@ import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { BigIntSerializerInterceptor } from './common/interceptors/bigint-serializer.interceptor';
+import { DateSerializerInterceptor } from './common/interceptors/date-serializer.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,13 +16,18 @@ async function bootstrap() {
   // Global exception filter for better error logging
   app.useGlobalFilters(new AllExceptionsFilter());
   
-  // Global interceptor for BigInt serialization
-  app.useGlobalInterceptors(new BigIntSerializerInterceptor());
+  // Global interceptors for serialization
+  app.useGlobalInterceptors(
+    new BigIntSerializerInterceptor(),
+    new DateSerializerInterceptor(),
+  );
   
   // Enable CORS
   app.enableCors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Tenant-Slug'],
   });
   
   // Global validation pipe

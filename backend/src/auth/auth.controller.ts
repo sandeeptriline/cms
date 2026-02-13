@@ -119,7 +119,7 @@ export class AuthController {
       login: {
         summary: 'Super Admin login',
         value: {
-          email: 'admin@example.com',
+          email: 'admin@platform.com',
           password: 'admin@123',
         },
       },
@@ -156,12 +156,12 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(TenantGuard) // Require tenant context
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'User login',
-    description: 'Authenticate user with email and password. Returns JWT access and refresh tokens.',
+    summary: 'User login (Email + Password)',
+    description:
+      'Authenticate user with email and password. Automatically finds the tenant by searching across all tenant databases. **No tenant ID required.** Returns JWT access and refresh tokens. If the email exists in multiple tenants, an error will be returned asking for tenant ID.',
   })
   @ApiBody({
     type: LoginDto,
@@ -169,6 +169,72 @@ export class AuthController {
     examples: {
       login: {
         summary: 'User login',
+        value: {
+          email: 'user@example.com',
+          password: 'SecurePassword123!',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Email exists in multiple tenants - tenant ID required',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 400 },
+        message: {
+          type: 'string',
+          example: 'Email exists in multiple tenants. Please provide tenant ID or use tenant-specific login.',
+        },
+        error: { type: 'string', example: 'Bad Request' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid credentials',
+    schema: {
+      type: 'object',
+      properties: {
+        statusCode: { type: 'number', example: 401 },
+        message: { type: 'string', example: 'Invalid credentials' },
+        error: { type: 'string', example: 'Unauthorized' },
+      },
+    },
+  })
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.loginByEmail(loginDto);
+
+    // Set HTTP-only cookies
+    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+
+    return result;
+  }
+
+  @Public()
+  @UseGuards(TenantGuard) // Require tenant context
+  @Post('login/tenant')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'User login with Tenant ID (Legacy)',
+    description:
+      'Legacy endpoint: Authenticate user with email, password, and tenant ID. Use `/auth/login` instead (email + password only). Returns JWT access and refresh tokens.',
+  })
+  @ApiBody({
+    type: LoginDto,
+    description: 'User login credentials',
+    examples: {
+      login: {
+        summary: 'User login with tenant',
         value: {
           email: 'user@example.com',
           password: 'SecurePassword123!',
@@ -195,7 +261,7 @@ export class AuthController {
   })
   @ApiSecurity('tenant-id')
   @ApiSecurity('tenant-slug')
-  async login(
+  async loginWithTenant(
     @Body() loginDto: LoginDto,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,

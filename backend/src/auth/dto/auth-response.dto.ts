@@ -25,6 +25,13 @@ export class UserResponseDto {
     type: [String],
   })
   roles?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Tenant ID (RETURNED in response only - NOT required for login). This is informational metadata indicating which tenant the user belongs to. null for Super Admin, tenant UUID for tenant users. Login only requires email and password.',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    nullable: true,
+  })
+  tenantId?: string | null;
 }
 
 export class AuthResponseDto {
@@ -61,7 +68,7 @@ export class UserMeResponseDto {
   email: string;
 
   @ApiPropertyOptional({
-    description: 'Tenant ID (null for Super Admin)',
+    description: 'Tenant ID (RETURNED in response only - NOT required for login). null for Super Admin, tenant UUID for tenant users.',
     example: '123e4567-e89b-12d3-a456-426614174000',
     nullable: true,
   })

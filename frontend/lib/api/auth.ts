@@ -19,6 +19,7 @@ export interface AuthResponse {
     email: string
     name?: string
     roles?: string[]
+    tenantId?: string | null // Can be null for Super Admin
   }
 }
 
@@ -41,11 +42,21 @@ export const authApi = {
   },
 
   /**
-   * Tenant User Login
-   * Requires tenant ID
+   * Tenant User Login (Email + Password Only)
+   * Automatically finds tenant by searching across tenant databases
+   * No tenant ID required
    */
-  async login(data: LoginDto, tenantId: string): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>('/auth/login', data, {
+  async login(data: LoginDto): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/login', data)
+    return response.data
+  },
+
+  /**
+   * Tenant User Login with Tenant ID (Legacy)
+   * Use login() instead - this is for backward compatibility
+   */
+  async loginWithTenant(data: LoginDto, tenantId: string): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/login/tenant', data, {
       headers: {
         'X-Tenant-ID': tenantId,
       },
