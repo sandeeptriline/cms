@@ -450,4 +450,45 @@ export class ContentTypesService {
 
     return { id: fieldId, ...fieldDto };
   }
+
+  /**
+   * Update field order for a content type
+   */
+  async updateFieldOrder(
+    tenantId: string,
+    contentTypeId: string,
+    fieldOrders: Array<{ id: string; sort: number }>,
+  ) {
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return this.tenantPrisma.withTenant(tenant.db_name, async (client) => {
+      // Verify content type exists
+      const contentType = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM content_types WHERE id = ?`,
+        contentTypeId
+      );
+
+      if (contentType.length === 0) {
+        throw new NotFoundException('Content type not found');
+      }
+
+      // Update each field's sort order
+      for (const fieldOrder of fieldOrders) {
+        await client.$executeRawUnsafe(
+          `UPDATE fields SET sort = ?, updated_at = NOW() WHERE id = ? AND content_type_id = ?`,
+          fieldOrder.sort,
+          fieldOrder.id,
+          contentTypeId
+        );
+      }
+
+      return { success: true, message: 'Field order updated successfully' };
+    });
+  }
 }

@@ -20,6 +20,9 @@ export interface SecondarySidebarItem {
   indent?: boolean
   divider?: boolean
   section?: string
+  isLabel?: boolean // If true, render as non-clickable label/header
+  isIconButton?: boolean // If true, render as icon-only button (for create buttons)
+  iconButtonAction?: () => void // Action for icon button
 }
 
 interface DashboardLayoutProps {
@@ -35,6 +38,8 @@ interface DashboardLayoutProps {
   secondarySidebarItems?: SecondarySidebarItem[]
   /** Show secondary sidebar (default: true) */
   showSecondarySidebar?: boolean
+  /** Callback when a sidebar item is clicked (for React state-based routing) */
+  onSidebarItemClick?: (item: SecondarySidebarItem) => void
 }
 
 export function DashboardLayout({ 
@@ -47,6 +52,7 @@ export function DashboardLayout({
   basePath = '/dashboard',
   secondarySidebarItems = [],
   showSecondarySidebar = true,
+  onSidebarItemClick,
 }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
@@ -83,6 +89,7 @@ export function DashboardLayout({
         basePath={basePath}
         secondarySidebarItems={secondarySidebarItems}
         showSecondarySidebar={showSecondarySidebar}
+        onSidebarItemClick={onSidebarItemClick}
       />
 
       {/* Main Content Area - Adjusted for fixed sidebar */}

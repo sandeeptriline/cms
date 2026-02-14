@@ -1,70 +1,47 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { DashboardLayout } from '@/components/layout/dashboard-layout'
+import { useSearchParams } from 'next/navigation'
+import { DashboardLayout, SecondarySidebarItem } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Database,
   Plus,
-  Edit,
-  Trash2,
   Loader2,
   AlertCircle,
-  Eye,
-  EyeOff,
-  FileText,
 } from 'lucide-react'
 import { contentTypesApi, ContentType } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
 import { CreateContentTypeModal } from './components/create-content-type-modal'
-import { EditContentTypeModal } from './components/edit-content-type-modal'
-import { AddFieldModal } from './components/add-field-modal'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { MoreHorizontal } from 'lucide-react'
+import { DataModelView } from './components/data-model-view'
 
 export default function DataModelPage() {
-  const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [contentTypes, setContentTypes] = useState<ContentType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [selectedContentType, setSelectedContentType] = useState<ContentType | null>(null)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [contentTypeToDelete, setContentTypeToDelete] = useState<ContentType | null>(null)
-  const [deleting, setDeleting] = useState(false)
-  const [addFieldModalOpen, setAddFieldModalOpen] = useState(false)
-  const [contentTypeForField, setContentTypeForField] = useState<ContentType | null>(null)
+  const [selectedContentTypeId, setSelectedContentTypeId] = useState<string | null>(null)
 
   useEffect(() => {
     loadContentTypes()
   }, [])
+
+  // Check if create action is requested from URL
+  useEffect(() => {
+    if (searchParams?.get('action') === 'create') {
+      setCreateModalOpen(true)
+    }
+  }, [searchParams])
+
+  // Set first data model as selected by default
+  useEffect(() => {
+    if (!loading && contentTypes.length > 0 && !selectedContentTypeId) {
+      setSelectedContentTypeId(contentTypes[0].id)
+    }
+  }, [loading, contentTypes, selectedContentTypeId])
 
   const loadContentTypes = async () => {
     try {
@@ -74,10 +51,10 @@ export default function DataModelPage() {
       setContentTypes(data || [])
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to load content types')
+      setError(e.message || 'Failed to load data models')
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load content types',
+        description: e.message || 'Failed to load data models',
         variant: 'destructive',
       })
     } finally {
@@ -85,60 +62,72 @@ export default function DataModelPage() {
     }
   }
 
-  const handleCreate = () => {
-    setSelectedContentType(null)
-    setCreateModalOpen(true)
-  }
-
-  const handleEdit = (contentType: ContentType) => {
-    setSelectedContentType(contentType)
-    setEditModalOpen(true)
-  }
-
-  const handleDeleteClick = (contentType: ContentType) => {
-    setContentTypeToDelete(contentType)
-    setDeleteDialogOpen(true)
-  }
-
-  const handleDeleteConfirm = async () => {
-    if (!contentTypeToDelete) return
-
-    try {
-      setDeleting(true)
-      await contentTypesApi.delete(contentTypeToDelete.id)
-      toast({
-        title: 'Success',
-        description: 'Content type deleted successfully',
-      })
-      setDeleteDialogOpen(false)
-      setContentTypeToDelete(null)
-      loadContentTypes()
-    } catch (err: unknown) {
-      const e = err as { message?: string }
-      toast({
-        title: 'Error',
-        description: e.message || 'Failed to delete content type',
-        variant: 'destructive',
-      })
-    } finally {
-      setDeleting(false)
+  const handleCreateSuccess = (newContentType?: ContentType) => {
+    loadContentTypes()
+    // If a new content type was created, select it
+    if (newContentType) {
+      setSelectedContentTypeId(newContentType.id)
     }
   }
 
-  const handleViewFields = (contentType: ContentType) => {
-    router.push(`/dashboard/settings/data-model/${contentType.id}/fields`)
+  const handleSidebarItemClick = (item: SecondarySidebarItem) => {
+    if (item.id === 'create-data-model') {
+      setCreateModalOpen(true)
+    } else if (item.id && item.id !== 'data-model-label' && item.id !== 'divider') {
+      // It's a data model item - select it
+      setSelectedContentTypeId(item.id)
+    }
   }
 
-  const handleAddField = (contentType: ContentType) => {
-    setContentTypeForField(contentType)
-    setAddFieldModalOpen(true)
+  const handleRefresh = () => {
+    loadContentTypes()
   }
 
-  const handleFieldAdded = () => {
-    setAddFieldModalOpen(false)
-    setContentTypeForField(null)
-    loadContentTypes() // Refresh to show new field count
+  // Convert content types to sidebar items
+  // Structure: "Data Model" label with "+" icon button, then all data models
+  const sidebarItems: SecondarySidebarItem[] = [
+    {
+      id: 'data-model-label',
+      name: 'Data Model',
+      isLabel: true, // Static label, not clickable
+    },
+    {
+      id: 'create-data-model',
+      name: 'Create Data Model',
+      icon: 'Plus',
+      isIconButton: true, // Render as icon-only button next to label
+    },
+    ...(contentTypes.length > 0
+      ? [
+          {
+            id: 'divider',
+            name: '',
+            divider: true,
+          } as SecondarySidebarItem,
+        ]
+      : []),
+    ...contentTypes.map((ct) => ({
+      id: ct.id,
+      name: ct.name,
+      icon: ct.icon || 'FileText', // Use icon from content type or default to FileText
+      indent: true, // Indent under label
+    })),
+  ]
+
+  // Determine active item for sidebar highlighting
+  const getActiveItemId = () => {
+    if (selectedContentTypeId) {
+      return selectedContentTypeId
+    }
+    return null
   }
+
+  // Update sidebar items with active state
+  const sidebarItemsWithActive: SecondarySidebarItem[] = sidebarItems.map((item) => ({
+    ...item,
+    // Mark as active if it's the selected data model
+    ...(item.id === getActiveItemId() && { isActive: true }),
+  }))
 
   if (loading) {
     return (
@@ -146,226 +135,86 @@ export default function DataModelPage() {
         basePath="/dashboard"
         title="Data Model"
         icon={<Database className="h-5 w-5" />}
+        secondarySidebarItems={[]}
+        onSidebarItemClick={handleSidebarItemClick}
       >
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Loading content types...</span>
+          <span className="ml-2 text-muted-foreground">Loading data models...</span>
         </div>
       </DashboardLayout>
     )
   }
 
+  // Show empty state if no data models
+  if (contentTypes.length === 0) {
+    return (
+      <DashboardLayout
+        basePath="/dashboard"
+        title="Data Model"
+        icon={<Database className="h-5 w-5" />}
+        secondarySidebarItems={sidebarItemsWithActive}
+        onSidebarItemClick={handleSidebarItemClick}
+      >
+        <div className="flex-1 bg-background">
+          <div className="px-6 py-6">
+            {error && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="border rounded-lg p-12 text-center">
+              <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No data models</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Get started by creating your first data model
+              </p>
+              <Button onClick={() => setCreateModalOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Data Model
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Create Modal */}
+        <CreateContentTypeModal
+          open={createModalOpen}
+          onOpenChange={setCreateModalOpen}
+          onSuccess={handleCreateSuccess}
+        />
+      </DashboardLayout>
+    )
+  }
+
+  // Render main view with selected data model
   return (
     <DashboardLayout
       basePath="/dashboard"
       title="Data Model"
       icon={<Database className="h-5 w-5" />}
+      secondarySidebarItems={sidebarItemsWithActive}
+      onSidebarItemClick={handleSidebarItemClick}
     >
-      <div className="flex-1 bg-background">
-        <div className="px-6 py-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl font-semibold">Content Types</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage your content schemas and field definitions
-              </p>
-            </div>
-            <Button onClick={handleCreate}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Content Type
-            </Button>
-          </div>
-
-          {/* Error Alert */}
-          {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Content Types Table */}
-          {contentTypes.length === 0 ? (
-            <div className="border rounded-lg p-12 text-center">
-              <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No content types</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Get started by creating your first content type
-              </p>
-              <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Content Type
-              </Button>
-            </div>
-          ) : (
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Collection</TableHead>
-                    <TableHead>Fields</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {contentTypes.map((contentType) => (
-                    <TableRow key={contentType.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {contentType.icon && (
-                            <span className="text-lg">{contentType.icon}</span>
-                          )}
-                          {contentType.name}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <code className="text-xs bg-muted px-2 py-1 rounded">
-                          {contentType.collection}
-                        </code>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {contentType.fields?.length || 0} fields
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {contentType.singleton ? (
-                          <Badge variant="secondary">Singleton</Badge>
-                        ) : (
-                          <Badge variant="outline">Collection</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {contentType.hidden ? (
-                            <Badge variant="secondary" className="gap-1">
-                              <EyeOff className="h-3 w-3" />
-                              Hidden
-                            </Badge>
-                          ) : (
-                            <Badge variant="default" className="gap-1">
-                              <Eye className="h-3 w-3" />
-                              Visible
-                            </Badge>
-                          )}
-                          {contentType.is_system && (
-                            <Badge variant="outline">System</Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleViewFields(contentType)}>
-                              <FileText className="h-4 w-4 mr-2" />
-                              View Fields
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleAddField(contentType)}>
-                              <Plus className="h-4 w-4 mr-2" />
-                              Add new field
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleEdit(contentType)}
-                              disabled={contentType.is_system}
-                            >
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteClick(contentType)}
-                              disabled={contentType.is_system}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+      {selectedContentTypeId ? (
+        <DataModelView
+          contentTypeId={selectedContentTypeId}
+          onRefresh={handleRefresh}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Loading...</span>
         </div>
-      </div>
+      )}
 
       {/* Create Modal */}
       <CreateContentTypeModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
-        onSuccess={loadContentTypes}
+        onSuccess={handleCreateSuccess}
       />
-
-      {/* Edit Modal */}
-      {selectedContentType && (
-        <EditContentTypeModal
-          open={editModalOpen}
-          onOpenChange={setEditModalOpen}
-          contentType={selectedContentType}
-          onSuccess={loadContentTypes}
-        />
-      )}
-
-      {/* Add Field Modal (Combined Selection + Configuration) */}
-      {contentTypeForField && (
-        <AddFieldModal
-          open={addFieldModalOpen}
-          onOpenChange={setAddFieldModalOpen}
-          contentTypeId={contentTypeForField.id}
-          contentTypeName={contentTypeForField.name}
-          onSuccess={handleFieldAdded}
-        />
-      )}
-
-      {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Content Type</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete "{contentTypeToDelete?.name}"? This action cannot be
-              undone. Make sure there are no content entries using this content type.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDeleteDialogOpen(false)}
-              disabled={deleting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={handleDeleteConfirm}
-              disabled={deleting}
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   )
 }

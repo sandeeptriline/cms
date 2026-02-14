@@ -15,6 +15,7 @@ import {
   Folder,
   Image,
   BarChart2,
+  BarChart,
   Puzzle,
   FileText,
   GitBranch,
@@ -30,6 +31,49 @@ import {
   Info,
   Users,
   Shield,
+  Plus,
+  Type,
+  Mail,
+  Phone,
+  Calendar,
+  Clock,
+  MapPin,
+  Link2,
+  Tag,
+  Star,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  Filter,
+  Grid,
+  List,
+  Layout,
+  PieChart,
+  TrendingUp,
+  ShoppingCart,
+  Package,
+  Truck,
+  CreditCard,
+  Wallet,
+  Building,
+  Home,
+  Globe,
+  Zap,
+  Flame,
+  Award,
+  Trophy,
+  Eye,
+  Camera,
+  Video,
+  Music,
+  Film,
+  Gamepad2,
+  Coffee,
+  Utensils,
+  Car,
+  Plane,
+  Ship,
+  Bike,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
@@ -71,6 +115,9 @@ export interface SecondarySidebarItem {
   indent?: boolean
   divider?: boolean
   section?: string
+  isLabel?: boolean // If true, render as non-clickable label/header
+  isIconButton?: boolean // If true, render as icon-only button (for create buttons)
+  iconButtonAction?: () => void // Action for icon button
 }
 
 interface SidebarProps {
@@ -82,6 +129,8 @@ interface SidebarProps {
   secondarySidebarItems?: SecondarySidebarItem[]
   /** Show secondary sidebar */
   showSecondarySidebar?: boolean
+  /** Callback when a sidebar item is clicked (for React state-based routing) */
+  onSidebarItemClick?: (item: SecondarySidebarItem) => void
 }
 
 export function Sidebar({ 
@@ -90,6 +139,7 @@ export function Sidebar({
   basePath = '/dashboard',
   secondarySidebarItems = [],
   showSecondarySidebar = true,
+  onSidebarItemClick,
 }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
@@ -357,27 +407,86 @@ export function Sidebar({
                     return <div key={item.id || `divider-${index}`} className="h-px bg-gray-200 my-2 mx-2" />
                   }
 
+                  // Handle labels - render as non-clickable header with optional icon button
+                  if (item.isLabel) {
+                    // Check if next item is an icon button
+                    const nextItem = secondarySidebarItems[index + 1]
+                    const hasIconButton = nextItem?.isIconButton
+                    
+                    return (
+                      <div key={item.id || `label-${index}`} className="px-2 py-1.5 mt-2 mb-1 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          {item.name}
+                        </span>
+                        {hasIconButton && nextItem && (
+                          <button
+                            onClick={() => {
+                              if (onSidebarItemClick) {
+                                onSidebarItemClick(nextItem)
+                              } else if (nextItem.iconButtonAction) {
+                                nextItem.iconButtonAction()
+                              }
+                            }}
+                            className="w-5 h-5 flex items-center justify-center rounded hover:bg-gray-200 transition-colors text-gray-400 hover:text-gray-600"
+                            title={nextItem.name}
+                          >
+                            {typeof nextItem.icon === 'string' && nextItem.icon === 'Plus' ? (
+                              <Plus className="w-4 h-4" strokeWidth={2} />
+                            ) : nextItem.icon ? (
+                              (() => {
+                                const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
+                                  Plus, Database, Folder, Image, Search, BarChart2, BarChart, Users, Puzzle, Settings,
+                                  GitBranch, Lock, Palette, Bookmark, Languages, Sparkles, Store,
+                                  FileCode, Bug, Lightbulb, Info, FileText, Shield,
+                                  Type, Mail, Phone, Calendar, Clock, MapPin, Link2, Tag, Star, Heart,
+                                  ThumbsUp, MessageSquare, Filter, Grid, List, Layout, PieChart, TrendingUp,
+                                  ShoppingCart, Package, Truck, CreditCard, Wallet, Building, Home, Globe,
+                                  Zap, Flame, Award, Trophy, Eye, Camera, Video, Music, Film, Gamepad2,
+                                  Coffee, Utensils, Car, Plane, Ship, Bike,
+                                }
+                                const IconComp = typeof nextItem.icon === 'string' ? iconMap[nextItem.icon] : nextItem.icon
+                                return IconComp ? <IconComp className="w-4 h-4" strokeWidth={2} /> : null
+                              })()
+                            ) : null}
+                          </button>
+                        )}
+                      </div>
+                    )
+                  }
+
+                  // Handle icon-only buttons - skip rendering as they're handled by the label above
+                  if (item.isIconButton) {
+                    return null // Icon button is rendered as part of the label
+                  }
+
                   // Get icon component (can be string name or React component)
                   let IconComponent: React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }> | null = null
                   if (typeof item.icon === 'string') {
                     // Import icon by name (similar to Directus)
                     const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>> = {
-                      Database, Folder, Image, Search, BarChart2, Users, Puzzle, Settings,
+                      Database, Folder, Image, Search, BarChart2, BarChart, Users, Puzzle, Settings,
                       GitBranch, Lock, Palette, Bookmark, Languages, Sparkles, Store,
-                      FileCode, Bug, Lightbulb, Info, FileText, Shield,
+                      FileCode, Bug, Lightbulb, Info, FileText, Shield, Plus,
+                      Type, Mail, Phone, Calendar, Clock, MapPin, Link2, Tag, Star, Heart,
+                      ThumbsUp, MessageSquare, Filter, Grid, List, Layout, PieChart, TrendingUp,
+                      ShoppingCart, Package, Truck, CreditCard, Wallet, Building, Home, Globe,
+                      Zap, Flame, Award, Trophy, Eye, Camera, Video, Music, Film, Gamepad2,
+                      Coffee, Utensils, Car, Plane, Ship, Bike,
                     }
-                    IconComponent = iconMap[item.icon] || Folder
+                    IconComponent = iconMap[item.icon] || FileText
                   } else if (item.icon) {
                     IconComponent = item.icon as React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>
                   } else {
-                    IconComponent = Folder
+                    IconComponent = FileText // Default icon for content types
                   }
 
                   // Determine href (use path or href)
                   const itemHref = item.href || item.path || ''
                   
                   // Directus pattern: Active if pathname includes item.id OR pathname starts with item path
-                  const isActive = pathname?.includes(item.id) || 
+                  // Also check if item has isActive property (for React state-based routing)
+                  const isActive = (item as any).isActive || 
+                                 pathname?.includes(item.id) || 
                                  (itemHref && pathname?.startsWith(itemHref)) ||
                                  false
 
@@ -388,6 +497,13 @@ export function Sidebar({
                     <div key={item.id || `item-${index}`}>
                       <button
                         onClick={() => {
+                          // If custom click handler provided, use it (for React state-based routing)
+                          if (onSidebarItemClick) {
+                            onSidebarItemClick(item)
+                            return
+                          }
+                          
+                          // Otherwise, use default Next.js navigation
                           if (hasChildren) {
                             // Toggle expand (would need state management)
                             // For now, just navigate

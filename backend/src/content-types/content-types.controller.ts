@@ -147,4 +147,24 @@ export class ContentTypesController {
   ) {
     return this.contentTypesService.createField(tenantId, contentTypeId, fieldDto);
   }
+
+  @Put(':id/fields/order')
+  @RequirePermission('content_type:update')
+  @ApiOperation({
+    summary: 'Update field order',
+    description: 'Update the sort order of fields in a content type. Requires content_type:update permission.',
+  })
+  @ApiParam({ name: 'id', description: 'Content type ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Field order updated successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Content type not found' })
+  async updateFieldOrder(
+    @TenantId() tenantId: string,
+    @Param('id') contentTypeId: string,
+    @Body() fieldOrders: Array<{ id: string; sort: number }>,
+  ) {
+    return this.contentTypesService.updateFieldOrder(tenantId, contentTypeId, fieldOrders);
+  }
 }

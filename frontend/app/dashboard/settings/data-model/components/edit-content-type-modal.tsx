@@ -16,7 +16,82 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2 } from 'lucide-react'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Loader2,
+  Trash2,
+  Type,
+  FileText,
+  Image,
+  Folder,
+  Database,
+  Settings,
+  User,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  Clock,
+  MapPin,
+  Link2,
+  Tag,
+  Bookmark,
+  Star,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  Bell,
+  Search,
+  Filter,
+  Grid,
+  List,
+  Layout,
+  BarChart,
+  PieChart,
+  TrendingUp,
+  ShoppingCart,
+  Package,
+  Truck,
+  CreditCard,
+  Wallet,
+  Building,
+  Home,
+  Globe,
+  Zap,
+  Lightbulb,
+  Flame,
+  Award,
+  Trophy,
+  Shield,
+  Lock,
+  Key,
+  Eye,
+  Camera,
+  Video,
+  Music,
+  Film,
+  Gamepad2,
+  Coffee,
+  Utensils,
+  Car,
+  Plane,
+  Ship,
+  Bike,
+} from 'lucide-react'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { contentTypesApi, ContentType, UpdateContentTypeDto } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
 
@@ -40,6 +115,8 @@ interface EditContentTypeModalProps {
   onOpenChange: (open: boolean) => void
   contentType: ContentType
   onSuccess: () => void
+  onDelete?: () => void
+  showDeleteButton?: boolean
 }
 
 export function EditContentTypeModal({
@@ -47,9 +124,13 @@ export function EditContentTypeModal({
   onOpenChange,
   contentType,
   onSuccess,
+  onDelete,
+  showDeleteButton = false,
 }: EditContentTypeModalProps) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   const {
     register,
@@ -85,6 +166,80 @@ export function EditContentTypeModal({
 
   const singleton = watch('singleton')
   const hidden = watch('hidden')
+  const iconValue = watch('icon')
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
+
+  // Icon library - around 50 icons
+  const iconLibrary = [
+    { name: 'Type', component: Type },
+    { name: 'FileText', component: FileText },
+    { name: 'Image', component: Image },
+    { name: 'Folder', component: Folder },
+    { name: 'Database', component: Database },
+    { name: 'Settings', component: Settings },
+    { name: 'User', component: User },
+    { name: 'Users', component: Users },
+    { name: 'Mail', component: Mail },
+    { name: 'Phone', component: Phone },
+    { name: 'Calendar', component: Calendar },
+    { name: 'Clock', component: Clock },
+    { name: 'MapPin', component: MapPin },
+    { name: 'Link2', component: Link2 },
+    { name: 'Tag', component: Tag },
+    { name: 'Bookmark', component: Bookmark },
+    { name: 'Star', component: Star },
+    { name: 'Heart', component: Heart },
+    { name: 'ThumbsUp', component: ThumbsUp },
+    { name: 'MessageSquare', component: MessageSquare },
+    { name: 'Bell', component: Bell },
+    { name: 'Search', component: Search },
+    { name: 'Filter', component: Filter },
+    { name: 'Grid', component: Grid },
+    { name: 'List', component: List },
+    { name: 'Layout', component: Layout },
+    { name: 'BarChart', component: BarChart },
+    { name: 'PieChart', component: PieChart },
+    { name: 'TrendingUp', component: TrendingUp },
+    { name: 'ShoppingCart', component: ShoppingCart },
+    { name: 'Package', component: Package },
+    { name: 'Truck', component: Truck },
+    { name: 'CreditCard', component: CreditCard },
+    { name: 'Wallet', component: Wallet },
+    { name: 'Building', component: Building },
+    { name: 'Home', component: Home },
+    { name: 'Globe', component: Globe },
+    { name: 'Zap', component: Zap },
+    { name: 'Lightbulb', component: Lightbulb },
+    { name: 'Flame', component: Flame },
+    { name: 'Award', component: Award },
+    { name: 'Trophy', component: Trophy },
+    { name: 'Shield', component: Shield },
+    { name: 'Lock', component: Lock },
+    { name: 'Key', component: Key },
+    { name: 'Eye', component: Eye },
+    { name: 'Camera', component: Camera },
+    { name: 'Video', component: Video },
+    { name: 'Music', component: Music },
+    { name: 'Film', component: Film },
+    { name: 'Gamepad2', component: Gamepad2 },
+    { name: 'Coffee', component: Coffee },
+    { name: 'Utensils', component: Utensils },
+    { name: 'Car', component: Car },
+    { name: 'Plane', component: Plane },
+    { name: 'Ship', component: Ship },
+    { name: 'Bike', component: Bike },
+  ]
+
+  const getIconComponent = (iconName: string | null | undefined) => {
+    if (!iconName) return null
+    const icon = iconLibrary.find(i => i.name.toLowerCase() === iconName.toLowerCase())
+    return icon ? icon.component : null
+  }
+
+  const handleIconSelect = (iconName: string) => {
+    setValue('icon', iconName)
+    setIconPickerOpen(false)
+  }
 
   const onSubmit = async (data: UpdateContentTypeFormData) => {
     try {
@@ -92,7 +247,7 @@ export function EditContentTypeModal({
       const updateDto: UpdateContentTypeDto = {
         name: data.name,
         collection: data.collection,
-        icon: data.icon || undefined,
+        icon: data.icon || 'FileText', // Default to FileText if no icon selected
         singleton: data.singleton,
         note: data.note || undefined,
         hidden: data.hidden,
@@ -117,8 +272,37 @@ export function EditContentTypeModal({
   }
 
   const handleClose = () => {
-    if (!saving) {
+    if (!saving && !deleting) {
       onOpenChange(false)
+    }
+  }
+
+  const handleDeleteClick = () => {
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    try {
+      setDeleting(true)
+      await contentTypesApi.delete(contentType.id)
+      toast({
+        title: 'Success',
+        description: 'Data model deleted successfully',
+      })
+      setDeleteDialogOpen(false)
+      onOpenChange(false)
+      if (onDelete) {
+        onDelete()
+      }
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({
+        title: 'Error',
+        description: e.message || 'Failed to delete data model',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -166,11 +350,79 @@ export function EditContentTypeModal({
 
             <div className="space-y-2">
               <Label htmlFor="icon">Icon (optional)</Label>
-              <Input
-                id="icon"
-                {...register('icon')}
-                disabled={saving || contentType.is_system}
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="icon"
+                  placeholder="Select an icon or type name"
+                  {...register('icon')}
+                  disabled={saving || contentType.is_system}
+                  className="flex-1"
+                />
+                <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={saving || contentType.is_system}
+                      className="px-3"
+                    >
+                      {iconValue && getIconComponent(iconValue) ? (
+                        (() => {
+                          const IconComponent = getIconComponent(iconValue)!
+                          return <IconComponent className="h-4 w-4" />
+                        })()
+                      ) : (
+                        <Grid className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-4" align="start">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Select Icon</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setValue('icon', '')
+                            setIconPickerOpen(false)
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-8 gap-2 max-h-[300px] overflow-y-auto">
+                        {iconLibrary.map((icon) => {
+                          const IconComponent = icon.component
+                          const isSelected = iconValue?.toLowerCase() === icon.name.toLowerCase()
+                          return (
+                            <button
+                              key={icon.name}
+                              type="button"
+                              onClick={() => handleIconSelect(icon.name)}
+                              className={`
+                                p-2 rounded-md border transition-colors
+                                ${isSelected 
+                                  ? 'border-primary bg-primary/10 text-primary' 
+                                  : 'border-gray-200 hover:border-primary hover:bg-primary/5'
+                                }
+                              `}
+                              title={icon.name}
+                            >
+                              <IconComponent className="h-5 w-5" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select an icon from the library or type the icon name manually
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -209,21 +461,66 @@ export function EditContentTypeModal({
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving || contentType.is_system}>
-              {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Changes'
+            <div className="flex items-center justify-between w-full">
+              {showDeleteButton && !contentType.is_system && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDeleteClick}
+                  disabled={saving || deleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
               )}
-            </Button>
+              <div className="flex gap-2 ml-auto">
+                <Button type="button" variant="outline" onClick={handleClose} disabled={saving || deleting}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving || deleting || contentType.is_system}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </Button>
+              </div>
+            </div>
           </DialogFooter>
         </form>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Data Model</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete "{contentType.name}"? This action cannot be undone.
+                Make sure there are no content entries using this data model.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   )

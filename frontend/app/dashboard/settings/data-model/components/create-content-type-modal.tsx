@@ -16,8 +16,72 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Loader2 } from 'lucide-react'
-import { contentTypesApi, CreateContentTypeDto } from '@/lib/api/content-types'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Loader2,
+  Type,
+  FileText,
+  Image,
+  Folder,
+  Database,
+  Settings,
+  User,
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  Clock,
+  MapPin,
+  Link2,
+  Tag,
+  Bookmark,
+  Star,
+  Heart,
+  ThumbsUp,
+  MessageSquare,
+  Bell,
+  Search,
+  Filter,
+  Grid,
+  List,
+  Layout,
+  BarChart,
+  PieChart,
+  TrendingUp,
+  ShoppingCart,
+  Package,
+  Truck,
+  CreditCard,
+  Wallet,
+  Building,
+  Home,
+  Globe,
+  Zap,
+  Lightbulb,
+  Flame,
+  Award,
+  Trophy,
+  Shield,
+  Lock,
+  Key,
+  Eye,
+  Camera,
+  Video,
+  Music,
+  Film,
+  Gamepad2,
+  Coffee,
+  Utensils,
+  Car,
+  Plane,
+  Ship,
+  Bike,
+} from 'lucide-react'
+import { contentTypesApi, CreateContentTypeDto, ContentType } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
 
 const createContentTypeSchema = z.object({
@@ -38,7 +102,7 @@ type CreateContentTypeFormData = z.infer<typeof createContentTypeSchema>
 interface CreateContentTypeModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: () => void
+  onSuccess: (contentType?: ContentType) => void
 }
 
 export function CreateContentTypeModal({
@@ -66,6 +130,80 @@ export function CreateContentTypeModal({
 
   const singleton = watch('singleton')
   const hidden = watch('hidden')
+  const iconValue = watch('icon')
+  const [iconPickerOpen, setIconPickerOpen] = useState(false)
+
+  // Icon library - around 50 icons
+  const iconLibrary = [
+    { name: 'Type', component: Type },
+    { name: 'FileText', component: FileText },
+    { name: 'Image', component: Image },
+    { name: 'Folder', component: Folder },
+    { name: 'Database', component: Database },
+    { name: 'Settings', component: Settings },
+    { name: 'User', component: User },
+    { name: 'Users', component: Users },
+    { name: 'Mail', component: Mail },
+    { name: 'Phone', component: Phone },
+    { name: 'Calendar', component: Calendar },
+    { name: 'Clock', component: Clock },
+    { name: 'MapPin', component: MapPin },
+    { name: 'Link2', component: Link2 },
+    { name: 'Tag', component: Tag },
+    { name: 'Bookmark', component: Bookmark },
+    { name: 'Star', component: Star },
+    { name: 'Heart', component: Heart },
+    { name: 'ThumbsUp', component: ThumbsUp },
+    { name: 'MessageSquare', component: MessageSquare },
+    { name: 'Bell', component: Bell },
+    { name: 'Search', component: Search },
+    { name: 'Filter', component: Filter },
+    { name: 'Grid', component: Grid },
+    { name: 'List', component: List },
+    { name: 'Layout', component: Layout },
+    { name: 'BarChart', component: BarChart },
+    { name: 'PieChart', component: PieChart },
+    { name: 'TrendingUp', component: TrendingUp },
+    { name: 'ShoppingCart', component: ShoppingCart },
+    { name: 'Package', component: Package },
+    { name: 'Truck', component: Truck },
+    { name: 'CreditCard', component: CreditCard },
+    { name: 'Wallet', component: Wallet },
+    { name: 'Building', component: Building },
+    { name: 'Home', component: Home },
+    { name: 'Globe', component: Globe },
+    { name: 'Zap', component: Zap },
+    { name: 'Lightbulb', component: Lightbulb },
+    { name: 'Flame', component: Flame },
+    { name: 'Award', component: Award },
+    { name: 'Trophy', component: Trophy },
+    { name: 'Shield', component: Shield },
+    { name: 'Lock', component: Lock },
+    { name: 'Key', component: Key },
+    { name: 'Eye', component: Eye },
+    { name: 'Camera', component: Camera },
+    { name: 'Video', component: Video },
+    { name: 'Music', component: Music },
+    { name: 'Film', component: Film },
+    { name: 'Gamepad2', component: Gamepad2 },
+    { name: 'Coffee', component: Coffee },
+    { name: 'Utensils', component: Utensils },
+    { name: 'Car', component: Car },
+    { name: 'Plane', component: Plane },
+    { name: 'Ship', component: Ship },
+    { name: 'Bike', component: Bike },
+  ]
+
+  const getIconComponent = (iconName: string | null | undefined) => {
+    if (!iconName) return null
+    const icon = iconLibrary.find(i => i.name.toLowerCase() === iconName.toLowerCase())
+    return icon ? icon.component : null
+  }
+
+  const handleIconSelect = (iconName: string) => {
+    setValue('icon', iconName)
+    setIconPickerOpen(false)
+  }
 
   const onSubmit = async (data: CreateContentTypeFormData) => {
     try {
@@ -74,20 +212,20 @@ export function CreateContentTypeModal({
       const createDto: CreateContentTypeDto = {
         name: data.name,
         collection: data.collection,
-        icon: data.icon || undefined,
+        icon: data.icon || 'FileText', // Default to FileText if no icon selected
         singleton: data.singleton,
         note: data.note || undefined,
         hidden: data.hidden,
       }
       
-      await contentTypesApi.create(createDto)
+      const created = await contentTypesApi.create(createDto)
       toast({
         title: 'Success',
         description: 'Content type created successfully',
       })
       reset()
       onOpenChange(false)
-      onSuccess()
+      onSuccess(created)
     } catch (err: unknown) {
       const e = err as { message?: string }
       toast({
@@ -153,13 +291,79 @@ export function CreateContentTypeModal({
 
             <div className="space-y-2">
               <Label htmlFor="icon">Icon (optional)</Label>
-              <Input
-                id="icon"
-                placeholder="article"
-                {...register('icon')}
-                disabled={saving}
-              />
-              <p className="text-xs text-muted-foreground">Icon name or emoji</p>
+              <div className="flex gap-2">
+                <Input
+                  id="icon"
+                  placeholder="Select an icon or type name"
+                  {...register('icon')}
+                  disabled={saving}
+                  className="flex-1"
+                />
+                <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={saving}
+                      className="px-3"
+                    >
+                      {iconValue && getIconComponent(iconValue) ? (
+                        (() => {
+                          const IconComponent = getIconComponent(iconValue)!
+                          return <IconComponent className="h-4 w-4" />
+                        })()
+                      ) : (
+                        <Grid className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-4" align="start">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Select Icon</Label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setValue('icon', '')
+                            setIconPickerOpen(false)
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-8 gap-2 max-h-[300px] overflow-y-auto">
+                        {iconLibrary.map((icon) => {
+                          const IconComponent = icon.component
+                          const isSelected = iconValue?.toLowerCase() === icon.name.toLowerCase()
+                          return (
+                            <button
+                              key={icon.name}
+                              type="button"
+                              onClick={() => handleIconSelect(icon.name)}
+                              className={`
+                                p-2 rounded-md border transition-colors
+                                ${isSelected 
+                                  ? 'border-primary bg-primary/10 text-primary' 
+                                  : 'border-gray-200 hover:border-primary hover:bg-primary/5'
+                                }
+                              `}
+                              title={icon.name}
+                            >
+                              <IconComponent className="h-5 w-5" />
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select an icon from the library or type the icon name manually
+              </p>
             </div>
 
             <div className="space-y-2">

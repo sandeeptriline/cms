@@ -113,4 +113,18 @@ export const contentTypesApi = {
     );
     return response.data;
   },
+
+  /**
+   * Update field order for a content type
+   */
+  async updateFieldOrder(
+    contentTypeId: string,
+    fieldOrders: Array<{ id: string; sort: number }>
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.put<{ success: boolean; message: string }>(
+      `/content-types/${contentTypeId}/fields/order`,
+      fieldOrders
+    );
+    return response.data;
+  },
 };
