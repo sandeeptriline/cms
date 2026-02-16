@@ -11,7 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
-import { ContentTypesService } from './content-types.service';
+import { DataModelsService } from './data-models.service';
 import { CreateContentTypeDto, CreateFieldDto } from './dto/create-content-type.dto';
 import { UpdateContentTypeDto } from './dto/update-content-type.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
@@ -27,7 +27,7 @@ import { TenantId } from '../tenants/decorators/tenant.decorator';
 @UseGuards(JwtAuthGuard, TenantGuard, PermissionGuard)
 @ApiBearerAuth('JWT-auth')
 export class ContentTypesController {
-  constructor(private readonly contentTypesService: ContentTypesService) {}
+  constructor(private readonly contentTypesService: DataModelsService) {}
 
   @Get()
   @RequirePermission('content_type:read')

@@ -12,8 +12,8 @@ import { UpdateFieldDto } from './dto/update-field.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
-export class ContentTypesService {
-  private readonly logger = new Logger(ContentTypesService.name);
+export class DataModelsService {
+  private readonly logger = new Logger(DataModelsService.name);
 
   constructor(
     private prisma: PrismaService,

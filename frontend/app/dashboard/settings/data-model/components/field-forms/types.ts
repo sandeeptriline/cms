@@ -23,13 +23,11 @@ export const fieldConfigurationSchema = z.object({
   relationType: z.string().optional(),
   targetCollection: z.string().optional(),
   targetFieldName: z.string().optional(),
-  // Component-specific fields
-  componentType: z.enum(['create', 'existing']).optional(),
-  componentDisplayName: z.string().optional(),
-  componentCategory: z.string().optional(),
-  componentIcon: z.string().optional(),
-  componentId: z.string().optional(),
-  componentRepeatable: z.boolean().default(false),
+  // Schema-specific fields
+  schemaDisplayName: z.string().optional(),
+  schemaIcon: z.string().optional(),
+  schemaId: z.string().optional(),
+  schemaRepeatable: z.boolean().default(false),
 })
 
 export type FieldConfigurationFormData = z.infer<typeof fieldConfigurationSchema>

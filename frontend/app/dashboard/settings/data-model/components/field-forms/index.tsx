@@ -4,7 +4,7 @@ import { FormElement } from '@/lib/api/form-elements'
 import { UseFormReturn } from 'react-hook-form'
 import { FieldConfigurationFormData } from './types'
 import { TextFieldForm } from './text-field-form'
-import { ComponentFieldForm, ComponentFieldFormProps } from './component-field-form'
+import { SchemaFieldForm } from './schema-field-form'
 import { RelationFieldForm } from './relation-field-form'
 import { DefaultFieldForm } from './default-field-form'
 
@@ -17,13 +17,14 @@ interface FieldFormRendererProps {
   contentTypeId: string
   contentTypes: any[]
   loadingContentTypes: boolean
-  // Component-specific props
-  componentStep?: 1 | 2
-  onComponentStep1Next?: () => void
-  onComponentStep2Back?: () => void
-  componentIconSearch?: string
-  onComponentIconSearchChange?: (value: string) => void
-  availableComponents?: any[]
+  // Schema-specific props
+  schemaStep?: 1 | 2
+  onSchemaStep1Next?: () => void
+  onSchemaStep2Back?: () => void
+  schemaIconSearch?: string
+  onSchemaIconSearchChange?: (value: string) => void
+  availableDataModels?: any[]
+  currentDataModelId?: string
 }
 
 export function FieldFormRenderer(props: FieldFormRendererProps) {
@@ -34,16 +35,17 @@ export function FieldFormRenderer(props: FieldFormRendererProps) {
     case 'text':
       return <TextFieldForm {...props} />
     
-    case 'component':
+    case 'schema':
       return (
-        <ComponentFieldForm
+        <SchemaFieldForm
           {...props}
-          componentStep={props.componentStep || 1}
-          onStep1Next={props.onComponentStep1Next || (() => {})}
-          onStep2Back={props.onComponentStep2Back || (() => {})}
-          componentIconSearch={props.componentIconSearch || ''}
-          onComponentIconSearchChange={props.onComponentIconSearchChange || (() => {})}
-          availableComponents={props.availableComponents || []}
+          schemaStep={props.schemaStep || 1}
+          onStep1Next={props.onSchemaStep1Next || (() => {})}
+          onStep2Back={props.onSchemaStep2Back || (() => {})}
+          schemaIconSearch={props.schemaIconSearch || ''}
+          onSchemaIconSearchChange={props.onSchemaIconSearchChange || (() => {})}
+          availableDataModels={props.availableDataModels || []}
+          currentDataModelId={props.currentDataModelId}
         />
       )
     

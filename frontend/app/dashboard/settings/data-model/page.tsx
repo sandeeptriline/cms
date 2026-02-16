@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { contentTypesApi, ContentType } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
-import { CreateContentTypeModal } from './components/create-content-type-modal'
+import { CreateDataModelModal } from './components/create-data-model-modal'
 import { DataModelView } from './components/data-model-view'
 
 export default function DataModelPage() {
@@ -179,7 +179,7 @@ export default function DataModelPage() {
         </div>
 
         {/* Create Modal */}
-        <CreateContentTypeModal
+        <CreateDataModelModal
           open={createModalOpen}
           onOpenChange={setCreateModalOpen}
           onSuccess={handleCreateSuccess}
@@ -210,7 +210,7 @@ export default function DataModelPage() {
       )}
 
       {/* Create Modal */}
-      <CreateContentTypeModal
+      <CreateDataModelModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
         onSuccess={handleCreateSuccess}

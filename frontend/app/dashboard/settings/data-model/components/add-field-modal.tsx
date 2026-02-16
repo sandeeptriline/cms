@@ -51,10 +51,10 @@ export function AddFieldModal({
   const [settingsTab, setSettingsTab] = useState<'BASIC' | 'ADVANCED'>('BASIC')
   const [contentTypes, setContentTypes] = useState<any[]>([])
   const [loadingContentTypes, setLoadingContentTypes] = useState(false)
-  // Component-specific state
-  const [componentStep, setComponentStep] = useState<1 | 2>(1)
-  const [componentIconSearch, setComponentIconSearch] = useState('')
-  const [availableComponents, setAvailableComponents] = useState<any[]>([])
+  // Schema-specific state
+  const [schemaStep, setSchemaStep] = useState<1 | 2>(1)
+  const [schemaIconSearch, setSchemaIconSearch] = useState('')
+  const [availableDataModels, setAvailableDataModels] = useState<any[]>([])
 
   const {
     register,
@@ -84,25 +84,27 @@ export function AddFieldModal({
       loadContentTypes()
       setViewMode('selection')
       setSelectedFormElement(null)
-      setComponentStep(1)
-      setComponentIconSearch('')
+      setSchemaStep(1)
+      setSchemaIconSearch('')
       setSettingsTab('BASIC')
       reset()
     }
   }, [open, reset])
 
-  // Reset to BASIC tab when component step changes to 1
+  // Reset to BASIC tab when schema step changes to 1
   useEffect(() => {
-    if (selectedFormElement?.key === 'component' && componentStep === 1) {
+    if (selectedFormElement?.key === 'schema' && schemaStep === 1) {
       setSettingsTab('BASIC')
     }
-  }, [componentStep, selectedFormElement])
+  }, [schemaStep, selectedFormElement])
 
   const loadContentTypes = async () => {
     try {
       setLoadingContentTypes(true)
       const data = await contentTypesApi.getAll()
       setContentTypes(data || [])
+      // Set available data models (excluding current one to prevent circular references)
+      setAvailableDataModels(data || [])
     } catch (err: unknown) {
       const e = err as { message?: string }
       toast({
@@ -135,10 +137,10 @@ export function AddFieldModal({
   const handleSelectField = (formElement: FormElement) => {
     setSelectedFormElement(formElement)
     setViewMode('configuration')
-    // Reset component-specific state
-    if (formElement.key === 'component') {
-      setComponentStep(1)
-      setComponentIconSearch('')
+    // Reset schema-specific state
+    if (formElement.key === 'schema') {
+      setSchemaStep(1)
+      setSchemaIconSearch('')
     }
     reset({
       field: '',
@@ -157,73 +159,49 @@ export function AddFieldModal({
       defaultValue: formElement.interface?.defaultValue || undefined,
       regexPattern: formElement.interface?.regexPattern || undefined,
       allowedTypes: formElement.default_settings?.allowedTypes || formElement.interface?.settings?.allowedTypes || [],
-      // Component defaults
-      componentType: 'create',
-      componentDisplayName: '',
-      componentCategory: '',
-      componentIcon: 'Puzzle',
-      componentRepeatable: false,
+      // Schema defaults
+      schemaDisplayName: '',
+      schemaIcon: 'Database',
+      schemaId: undefined,
+      schemaRepeatable: false,
     })
   }
 
   const handleBackToSelection = () => {
     setViewMode('selection')
     setSelectedFormElement(null)
-    setComponentStep(1)
-    setComponentIconSearch('')
+    setSchemaStep(1)
+    setSchemaIconSearch('')
     reset()
   }
 
-  const handleComponentStep1Next = () => {
-    const componentType = watch('componentType')
-    const displayName = watch('componentDisplayName')
-    const category = watch('componentCategory')
+  const handleSchemaStep1Next = () => {
+    const displayName = watch('schemaDisplayName')
     
     // Validation for step 1
-    if (componentType === 'create') {
-      if (!displayName || displayName.trim() === '') {
-        toast({
-          title: 'Error',
-          description: 'Display name is required',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (!category || category.trim() === '') {
-        toast({
-          title: 'Error',
-          description: 'Category is required',
-          variant: 'destructive',
-        })
-        return
-      }
-    } else {
-      // For existing component, we need componentId
-      const componentId = watch('componentId')
-      if (!componentId) {
-        toast({
-          title: 'Error',
-          description: 'Please select a component',
-          variant: 'destructive',
-        })
-        return
-      }
+    if (!displayName || displayName.trim() === '') {
+      toast({
+        title: 'Error',
+        description: 'Display name is required',
+        variant: 'destructive',
+      })
+      return
     }
     
-    setComponentStep(2)
+    setSchemaStep(2)
   }
 
-  const handleComponentStep2Back = () => {
-    setComponentStep(1)
+  const handleSchemaStep2Back = () => {
+    setSchemaStep(1)
   }
 
   const onSubmit = async (data: FieldConfigurationFormData) => {
     if (!selectedFormElement) return
 
-    // Component field validation
-    if (selectedFormElement.key === 'component') {
-      if (componentStep === 1) {
-        handleComponentStep1Next()
+    // Schema field validation
+    if (selectedFormElement.key === 'schema') {
+      if (schemaStep === 1) {
+        handleSchemaStep1Next()
         return
       }
       // Step 2 validation
@@ -231,6 +209,14 @@ export function AddFieldModal({
         toast({
           title: 'Error',
           description: 'Field name is required',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!data.schemaId) {
+        toast({
+          title: 'Error',
+          description: 'Please select a data model',
           variant: 'destructive',
         })
         return
@@ -265,23 +251,12 @@ export function AddFieldModal({
             targetFieldName: data.targetFieldName,
             sourceCollection: contentTypeId,
           }),
-          // Component-specific options
-          ...(selectedFormElement.key === 'component' && {
-            componentType: data.componentType,
-            componentDisplayName: data.componentDisplayName,
-            componentCategory: data.componentCategory,
-            componentIcon: data.componentIcon,
-            componentId: data.componentId,
-            componentRepeatable: data.componentRepeatable,
-            // Store component metadata for new components
-            ...(data.componentType === 'create' && {
-              componentMetadata: {
-                displayName: data.componentDisplayName,
-                category: data.componentCategory,
-                icon: data.componentIcon,
-                repeatable: data.componentRepeatable,
-              },
-            }),
+          // Schema-specific options
+          ...(selectedFormElement.key === 'schema' && {
+            schemaDisplayName: data.schemaDisplayName,
+            schemaIcon: data.schemaIcon,
+            schemaId: data.schemaId,
+            schemaRepeatable: data.schemaRepeatable,
           }),
         },
         validation: {
@@ -304,8 +279,8 @@ export function AddFieldModal({
         description: 'Field added successfully',
       })
       reset()
-      setComponentStep(1)
-      setComponentIconSearch('')
+      setSchemaStep(1)
+      setSchemaIconSearch('')
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -340,9 +315,9 @@ export function AddFieldModal({
   
   // Separate into two sections:
   // Section 1: Regular fields (text, rich text blocks, number, date, media, relation, rich text markdown, boolean, json, email, password, enumeration, UID)
-  // Section 2: Component and Dynamic Zone
+  // Section 2: Schema and Dynamic Zone
   const section1Fields = ['text', 'rich_text_blocks', 'number', 'date', 'media', 'relation', 'markdown', 'boolean', 'json', 'email', 'password', 'enumeration', 'uid']
-  const section2Fields = ['component', 'dynamic_zone']
+  const section2Fields = ['schema', 'dynamic_zone']
   
   const section1Elements = displayElements.filter((fe) => section1Fields.includes(fe.key)).sort((a, b) => {
     const aIndex = section1Fields.indexOf(a.key)
@@ -479,7 +454,7 @@ export function AddFieldModal({
                   </div>
                 )}
 
-                {/* Section 2: Component and Dynamic Zone */}
+                {/* Section 2: Schema and Dynamic Zone */}
                 {section2Elements.length > 0 && (
                   <div>
                     <div className="mb-3">
@@ -589,8 +564,8 @@ export function AddFieldModal({
                 )}
               </div>
               <DialogTitle>
-                {selectedFormElement?.key === 'component' 
-                  ? `Add new component (${componentStep}/2)`
+                {selectedFormElement?.key === 'schema' 
+                  ? `Add new schema (${schemaStep}/2)`
                   : `Add new ${selectedFormElement?.name || 'field'} field`
                 }
               </DialogTitle>
@@ -613,11 +588,11 @@ export function AddFieldModal({
               </button>
               <button
                 onClick={() => {
-                  if (!(selectedFormElement?.key === 'component' && componentStep === 1)) {
+                  if (!(selectedFormElement?.key === 'schema' && schemaStep === 1)) {
                     setSettingsTab('ADVANCED')
                   }
                 }}
-                disabled={selectedFormElement?.key === 'component' && componentStep === 1}
+                disabled={selectedFormElement?.key === 'schema' && schemaStep === 1}
                 className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                   settingsTab === 'ADVANCED'
                     ? 'border-primary text-primary'
@@ -647,12 +622,13 @@ export function AddFieldModal({
                     contentTypeId={contentTypeId}
                     contentTypes={contentTypes}
                     loadingContentTypes={loadingContentTypes}
-                    componentStep={componentStep}
-                    onComponentStep1Next={handleComponentStep1Next}
-                    onComponentStep2Back={handleComponentStep2Back}
-                    componentIconSearch={componentIconSearch}
-                    onComponentIconSearchChange={setComponentIconSearch}
-                    availableComponents={availableComponents}
+                    schemaStep={schemaStep}
+                    onSchemaStep1Next={handleSchemaStep1Next}
+                    onSchemaStep2Back={handleSchemaStep2Back}
+                    schemaIconSearch={schemaIconSearch}
+                    onSchemaIconSearchChange={setSchemaIconSearch}
+                    availableDataModels={availableDataModels}
+                    currentDataModelId={contentTypeId}
                   />
                 )}
               </div>
@@ -661,21 +637,21 @@ export function AddFieldModal({
                 <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
                   Cancel
                 </Button>
-                {selectedFormElement?.key === 'component' && componentStep === 1 ? (
+                {selectedFormElement?.key === 'schema' && schemaStep === 1 ? (
                   <Button
                     type="button"
-                    onClick={handleComponentStep1Next}
+                    onClick={handleSchemaStep1Next}
                     disabled={saving}
                   >
-                    Configure the component
+                    Configure the schema
                   </Button>
                 ) : (
                   <>
-                    {selectedFormElement?.key === 'component' && componentStep === 2 && (
+                    {selectedFormElement?.key === 'schema' && schemaStep === 2 && (
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={handleComponentStep2Back}
+                        onClick={handleSchemaStep2Back}
                         disabled={saving}
                       >
                         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -696,7 +672,7 @@ export function AddFieldModal({
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                           Adding...
                         </>
-                      ) : selectedFormElement?.key === 'component' && componentStep === 2 ? (
+                      ) : selectedFormElement?.key === 'schema' && schemaStep === 2 ? (
                         'Finish'
                       ) : (
                         'Finish'

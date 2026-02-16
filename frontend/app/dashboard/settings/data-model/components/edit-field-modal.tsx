@@ -47,10 +47,10 @@ export function EditFieldModal({
   const [settingsTab, setSettingsTab] = useState<'BASIC' | 'ADVANCED'>('BASIC')
   const [contentTypes, setContentTypes] = useState<any[]>([])
   const [loadingContentTypes, setLoadingContentTypes] = useState(false)
-  // Component-specific state
-  const [componentStep, setComponentStep] = useState<1 | 2>(1)
-  const [componentIconSearch, setComponentIconSearch] = useState('')
-  const [availableComponents, setAvailableComponents] = useState<any[]>([])
+  // Schema-specific state
+  const [schemaStep, setSchemaStep] = useState<1 | 2>(1)
+  const [schemaIconSearch, setSchemaIconSearch] = useState('')
+  const [availableDataModels, setAvailableDataModels] = useState<any[]>([])
 
   const {
     register,
@@ -79,8 +79,8 @@ export function EditFieldModal({
       loadFormElement()
       loadContentTypes()
       setSettingsTab('BASIC')
-      setComponentStep(1)
-      setComponentIconSearch('')
+      setSchemaStep(1)
+      setSchemaIconSearch('')
     }
   }, [open, field])
 
@@ -96,6 +96,9 @@ export function EditFieldModal({
       setLoadingContentTypes(true)
       const data = await contentTypesApi.getAll()
       setContentTypes(data || [])
+      // Exclude current data model to prevent circular references
+      const filtered = data.filter(ct => ct.id !== contentTypeId)
+      setAvailableDataModels(filtered || [])
     } catch (err: unknown) {
       const e = err as { message?: string }
       toast({
@@ -146,10 +149,9 @@ export function EditFieldModal({
     const options = field.options || {}
     const validation = field.validation || {}
 
-    // Determine component step for component fields
-    if (formElement.key === 'component') {
-      // If component has metadata, it's step 2, otherwise step 1
-      setComponentStep(options.componentMetadata ? 2 : 1)
+    // For schema fields, always start at step 1 when editing
+    if (formElement.key === 'schema') {
+      setSchemaStep(1)
     }
 
     reset({
@@ -173,66 +175,41 @@ export function EditFieldModal({
       relationType: options.relationType || undefined,
       targetCollection: options.targetCollection || undefined,
       targetFieldName: options.targetFieldName || undefined,
-      // Component-specific
-      componentType: options.componentType || 'create',
-      componentDisplayName: options.componentDisplayName || options.componentMetadata?.displayName || '',
-      componentCategory: options.componentCategory || options.componentMetadata?.category || '',
-      componentIcon: options.componentIcon || options.componentMetadata?.icon || 'Puzzle',
-      componentId: options.componentId || undefined,
-      componentRepeatable: options.componentRepeatable || options.componentMetadata?.repeatable || false,
+      // Schema-specific
+      schemaDisplayName: options.schemaDisplayName || '',
+      schemaIcon: options.schemaIcon || 'Database',
+      schemaId: options.schemaId || undefined,
+      schemaRepeatable: options.schemaRepeatable || false,
     })
   }
 
-  const handleComponentStep1Next = () => {
-    const componentType = watch('componentType')
-    const displayName = watch('componentDisplayName')
-    const category = watch('componentCategory')
+  const handleSchemaStep1Next = () => {
+    const displayName = watch('schemaDisplayName')
     
     // Validation for step 1
-    if (componentType === 'create') {
-      if (!displayName || displayName.trim() === '') {
-        toast({
-          title: 'Error',
-          description: 'Display name is required',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (!category || category.trim() === '') {
-        toast({
-          title: 'Error',
-          description: 'Category is required',
-          variant: 'destructive',
-        })
-        return
-      }
-    } else {
-      // For existing component, we need componentId
-      const componentId = watch('componentId')
-      if (!componentId) {
-        toast({
-          title: 'Error',
-          description: 'Please select a component',
-          variant: 'destructive',
-        })
-        return
-      }
+    if (!displayName || displayName.trim() === '') {
+      toast({
+        title: 'Error',
+        description: 'Display name is required',
+        variant: 'destructive',
+      })
+      return
     }
     
-    setComponentStep(2)
+    setSchemaStep(2)
   }
 
-  const handleComponentStep2Back = () => {
-    setComponentStep(1)
+  const handleSchemaStep2Back = () => {
+    setSchemaStep(1)
   }
 
   const onSubmit = async (data: FieldConfigurationFormData) => {
     if (!formElement) return
 
-    // Component field validation
-    if (formElement.key === 'component') {
-      if (componentStep === 1) {
-        handleComponentStep1Next()
+    // Schema field validation
+    if (formElement.key === 'schema') {
+      if (schemaStep === 1) {
+        handleSchemaStep1Next()
         return
       }
       // Step 2 validation
@@ -274,23 +251,12 @@ export function EditFieldModal({
             targetFieldName: data.targetFieldName,
             sourceCollection: contentTypeId,
           }),
-          // Component-specific options
-          ...(formElement.key === 'component' && {
-            componentType: data.componentType,
-            componentDisplayName: data.componentDisplayName,
-            componentCategory: data.componentCategory,
-            componentIcon: data.componentIcon,
-            componentId: data.componentId,
-            componentRepeatable: data.componentRepeatable,
-            // Store component metadata for new components
-            ...(data.componentType === 'create' && {
-              componentMetadata: {
-                displayName: data.componentDisplayName,
-                category: data.componentCategory,
-                icon: data.componentIcon,
-                repeatable: data.componentRepeatable,
-              },
-            }),
+          // Schema-specific options
+          ...(formElement.key === 'schema' && {
+            schemaDisplayName: data.schemaDisplayName,
+            schemaIcon: data.schemaIcon,
+            schemaId: data.schemaId,
+            schemaRepeatable: data.schemaRepeatable,
           }),
         },
         validation: {
@@ -313,8 +279,8 @@ export function EditFieldModal({
         description: 'Field updated successfully',
       })
       reset()
-      setComponentStep(1)
-      setComponentIconSearch('')
+      setSchemaStep(1)
+      setSchemaIconSearch('')
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -381,8 +347,8 @@ export function EditFieldModal({
             )}
           </div>
           <DialogTitle>
-            {formElement?.key === 'component' 
-              ? `Edit component (${componentStep}/2)`
+            {formElement?.key === 'schema' 
+              ? `Edit schema (${schemaStep}/2)`
               : `Edit ${formElement?.name || 'field'} field`
             }
           </DialogTitle>
@@ -405,11 +371,11 @@ export function EditFieldModal({
           </button>
           <button
             onClick={() => {
-              if (!(formElement?.key === 'component' && componentStep === 1)) {
+              if (!(formElement?.key === 'schema' && schemaStep === 1)) {
                 setSettingsTab('ADVANCED')
               }
             }}
-            disabled={formElement?.key === 'component' && componentStep === 1}
+            disabled={formElement?.key === 'schema' && schemaStep === 1}
             className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
               settingsTab === 'ADVANCED'
                 ? 'border-primary text-primary'
@@ -439,12 +405,13 @@ export function EditFieldModal({
                 contentTypeId={contentTypeId}
                 contentTypes={contentTypes}
                 loadingContentTypes={loadingContentTypes}
-                componentStep={componentStep}
-                onComponentStep1Next={handleComponentStep1Next}
-                onComponentStep2Back={handleComponentStep2Back}
-                componentIconSearch={componentIconSearch}
-                onComponentIconSearchChange={setComponentIconSearch}
-                availableComponents={availableComponents}
+                schemaStep={schemaStep}
+                onSchemaStep1Next={handleSchemaStep1Next}
+                onSchemaStep2Back={handleSchemaStep2Back}
+                schemaIconSearch={schemaIconSearch}
+                onSchemaIconSearchChange={setSchemaIconSearch}
+                availableDataModels={availableDataModels}
+                currentDataModelId={contentTypeId}
               />
             )}
           </div>
@@ -453,21 +420,21 @@ export function EditFieldModal({
             <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
               Cancel
             </Button>
-            {formElement?.key === 'component' && componentStep === 1 ? (
+            {formElement?.key === 'schema' && schemaStep === 1 ? (
               <Button
                 type="button"
-                onClick={handleComponentStep1Next}
+                onClick={handleSchemaStep1Next}
                 disabled={saving}
               >
-                Configure the component
+                Configure the schema
               </Button>
             ) : (
               <>
-                {formElement?.key === 'component' && componentStep === 2 && (
+                {formElement?.key === 'schema' && schemaStep === 2 && (
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={handleComponentStep2Back}
+                    onClick={handleSchemaStep2Back}
                     disabled={saving}
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />

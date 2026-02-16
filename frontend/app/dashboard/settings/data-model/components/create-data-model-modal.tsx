@@ -36,17 +36,17 @@ const createContentTypeSchema = z.object({
 
 type CreateContentTypeFormData = z.infer<typeof createContentTypeSchema>
 
-interface CreateContentTypeModalProps {
+interface CreateDataModelModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: (contentType?: ContentType) => void
 }
 
-export function CreateContentTypeModal({
+export function CreateDataModelModal({
   open,
   onOpenChange,
   onSuccess,
-}: CreateContentTypeModalProps) {
+}: CreateDataModelModalProps) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
 
