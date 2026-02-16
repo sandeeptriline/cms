@@ -32,49 +32,8 @@ import {
   Users,
   Shield,
   Plus,
-  Type,
-  Mail,
-  Phone,
-  Calendar,
-  Clock,
-  MapPin,
-  Link2,
-  Tag,
-  Star,
-  Heart,
-  ThumbsUp,
-  MessageSquare,
-  Filter,
-  Grid,
-  List,
-  Layout,
-  PieChart,
-  TrendingUp,
-  ShoppingCart,
-  Package,
-  Truck,
-  CreditCard,
-  Wallet,
-  Building,
-  Home,
-  Globe,
-  Zap,
-  Flame,
-  Award,
-  Trophy,
-  Eye,
-  Camera,
-  Video,
-  Music,
-  Film,
-  Gamepad2,
-  Coffee,
-  Utensils,
-  Car,
-  Plane,
-  Ship,
-  Bike,
 } from 'lucide-react'
+import { getIconComponent, getDefaultIcon } from '@/lib/utils/icon-library'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/auth-context'
 import { isSuperAdmin } from '@/lib/utils/roles'
@@ -434,17 +393,9 @@ export function Sidebar({
                               <Plus className="w-4 h-4" strokeWidth={2} />
                             ) : nextItem.icon ? (
                               (() => {
-                                const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
-                                  Plus, Database, Folder, Image, Search, BarChart2, BarChart, Users, Puzzle, Settings,
-                                  GitBranch, Lock, Palette, Bookmark, Languages, Sparkles, Store,
-                                  FileCode, Bug, Lightbulb, Info, FileText, Shield,
-                                  Type, Mail, Phone, Calendar, Clock, MapPin, Link2, Tag, Star, Heart,
-                                  ThumbsUp, MessageSquare, Filter, Grid, List, Layout, PieChart, TrendingUp,
-                                  ShoppingCart, Package, Truck, CreditCard, Wallet, Building, Home, Globe,
-                                  Zap, Flame, Award, Trophy, Eye, Camera, Video, Music, Film, Gamepad2,
-                                  Coffee, Utensils, Car, Plane, Ship, Bike,
-                                }
-                                const IconComp = typeof nextItem.icon === 'string' ? iconMap[nextItem.icon] : nextItem.icon
+                                const IconComp = typeof nextItem.icon === 'string' 
+                                  ? getIconComponent(nextItem.icon) || Plus
+                                  : nextItem.icon
                                 return IconComp ? <IconComp className="w-4 h-4" strokeWidth={2} /> : null
                               })()
                             ) : null}
@@ -462,22 +413,12 @@ export function Sidebar({
                   // Get icon component (can be string name or React component)
                   let IconComponent: React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }> | null = null
                   if (typeof item.icon === 'string') {
-                    // Import icon by name (similar to Directus)
-                    const iconMap: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>> = {
-                      Database, Folder, Image, Search, BarChart2, BarChart, Users, Puzzle, Settings,
-                      GitBranch, Lock, Palette, Bookmark, Languages, Sparkles, Store,
-                      FileCode, Bug, Lightbulb, Info, FileText, Shield, Plus,
-                      Type, Mail, Phone, Calendar, Clock, MapPin, Link2, Tag, Star, Heart,
-                      ThumbsUp, MessageSquare, Filter, Grid, List, Layout, PieChart, TrendingUp,
-                      ShoppingCart, Package, Truck, CreditCard, Wallet, Building, Home, Globe,
-                      Zap, Flame, Award, Trophy, Eye, Camera, Video, Music, Film, Gamepad2,
-                      Coffee, Utensils, Car, Plane, Ship, Bike,
-                    }
-                    IconComponent = iconMap[item.icon] || FileText
+                    // Use common icon library
+                    IconComponent = getIconComponent(item.icon) || getDefaultIcon()
                   } else if (item.icon) {
                     IconComponent = item.icon as React.ComponentType<{ className?: string; style?: React.CSSProperties; strokeWidth?: number }>
                   } else {
-                    IconComponent = FileText // Default icon for content types
+                    IconComponent = getDefaultIcon() // Default icon for content types
                   }
 
                   // Determine href (use path or href)

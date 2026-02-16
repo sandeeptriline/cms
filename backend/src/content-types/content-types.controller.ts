@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 import { ContentTypesService } from './content-types.service';
 import { CreateContentTypeDto, CreateFieldDto } from './dto/create-content-type.dto';
 import { UpdateContentTypeDto } from './dto/update-content-type.dto';
+import { UpdateFieldDto } from './dto/update-field.dto';
 import { ContentTypeResponseDto } from './dto/content-type-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../permissions/guards/permission.guard';
@@ -146,6 +147,52 @@ export class ContentTypesController {
     @Body() fieldDto: CreateFieldDto,
   ) {
     return this.contentTypesService.createField(tenantId, contentTypeId, fieldDto);
+  }
+
+  @Put(':id/fields/:fieldId')
+  @RequirePermission('content_type:update')
+  @ApiOperation({
+    summary: 'Update a field',
+    description: 'Update a field in a content type. Requires content_type:update permission.',
+  })
+  @ApiParam({ name: 'id', description: 'Content type ID' })
+  @ApiParam({ name: 'fieldId', description: 'Field ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Field updated successfully',
+    type: ContentTypeResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Content type or field not found' })
+  @ApiResponse({ status: 400, description: 'Field name already exists' })
+  async updateField(
+    @TenantId() tenantId: string,
+    @Param('id') contentTypeId: string,
+    @Param('fieldId') fieldId: string,
+    @Body() updateDto: UpdateFieldDto,
+  ) {
+    return this.contentTypesService.updateField(tenantId, contentTypeId, fieldId, updateDto);
+  }
+
+  @Delete(':id/fields/:fieldId')
+  @RequirePermission('content_type:update')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete a field',
+    description: 'Delete a field from a content type. Requires content_type:update permission.',
+  })
+  @ApiParam({ name: 'id', description: 'Content type ID' })
+  @ApiParam({ name: 'fieldId', description: 'Field ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Field deleted successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Content type or field not found' })
+  async deleteField(
+    @TenantId() tenantId: string,
+    @Param('id') contentTypeId: string,
+    @Param('fieldId') fieldId: string,
+  ) {
+    return this.contentTypesService.deleteField(tenantId, contentTypeId, fieldId);
   }
 
   @Put(':id/fields/order')

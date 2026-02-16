@@ -748,7 +748,58 @@ INSERT INTO form_elements (
 );
 
 -- =============================================================================
--- 13. Rich Text (Markdown) Field
+-- 13. Component Field
+-- =============================================================================
+INSERT INTO form_elements (
+    id, project_id, name, `key`, type, category, icon, icon_color, description,
+    interface, variants, default_variant, validation_rules, default_settings,
+    available_settings, supports_conditions, supports_translations, supports_relations, is_system, is_active, sort_order
+) VALUES (
+    UUID(),
+    NULL,  -- System element: available to all projects
+    'Component',
+    'component',
+    'component',
+    'advanced',
+    'Puzzle',  -- Icon name (can be from any icon library: lucide-react, react-icons, heroicons, etc.)
+    '#9333EA',  -- Purple color
+    'Group of fields that you can repeat or reuse',
+    JSON_OBJECT(
+        'component', 'component',
+        'type', 'component',
+        'label', 'Component',
+        'helperText', 'Group of fields that you can repeat or reuse',
+        'width', 'full',
+        'layout', 'vertical',
+        'componentType', 'create',  -- 'create' or 'existing'
+        'componentDisplayName', NULL,  -- For new components
+        'componentCategory', NULL,  -- For new components
+        'componentIcon', 'Puzzle',  -- For new components
+        'componentId', NULL,  -- For existing components
+        'componentRepeatable', false,  -- false = Single, true = Repeatable
+        'defaultValue', NULL,
+        'settings', JSON_OBJECT(
+            'required', false,
+            'private', false
+        ),
+        'validation', JSON_OBJECT('rules', JSON_ARRAY()),
+        'conditions', JSON_ARRAY()
+    ),
+    NULL,  -- No variants for component
+    NULL,  -- No default variant
+    JSON_OBJECT('required', false),
+    JSON_OBJECT('required', false, 'private', false),
+    JSON_ARRAY('required', 'private', 'componentType', 'componentDisplayName', 'componentCategory', 'componentIcon', 'componentId', 'componentRepeatable'),
+    1,  -- supports_conditions (has Condition section)
+    0,  -- supports_translations (components typically don't support localization)
+    0,  -- supports_relations
+    1,  -- is_system
+    1,  -- is_active
+    8   -- sort_order (after Markdown 7, will be positioned on separate row via CSS)
+);
+
+-- =============================================================================
+-- 14. Rich Text (Markdown) Field
 -- =============================================================================
 INSERT INTO form_elements (
     id, project_id, name, `key`, type, category, icon, icon_color, description,
@@ -797,6 +848,48 @@ INSERT INTO form_elements (
     1,  -- is_system
     1,  -- is_active
     7   -- sort_order
+);
+
+-- =============================================================================
+-- 15. Dynamic Zone Field
+-- =============================================================================
+INSERT INTO form_elements (
+    id, project_id, name, `key`, type, category, icon, icon_color, description,
+    interface, variants, default_variant, validation_rules, default_settings,
+    available_settings, supports_conditions, supports_translations, supports_relations, is_system, is_active, sort_order
+) VALUES (
+    UUID(),
+    NULL,  -- System element: available to all projects
+    'Dynamic zone',
+    'dynamic_zone',
+    'dynamiczone',
+    'advanced',
+    'Infinity',  -- Icon name (can be from any icon library: lucide-react, react-icons, heroicons, etc.)
+    '#9333EA',  -- Purple color
+    'Dynamically pick component when editing content',
+    JSON_OBJECT(
+        'component', 'dynamic-zone',
+        'type', 'dynamiczone',
+        'label', 'Dynamic Zone',
+        'helperText', 'Dynamically pick component when editing content',
+        'width', 'full',
+        'layout', 'vertical',
+        'defaultValue', NULL,
+        'settings', JSON_OBJECT('required', false, 'private', false),
+        'validation', JSON_OBJECT('rules', JSON_ARRAY()),
+        'conditions', JSON_ARRAY()
+    ),
+    NULL,  -- No variants for dynamic zone
+    NULL,  -- No default variant
+    JSON_OBJECT('required', false),
+    JSON_OBJECT('required', false, 'private', false),
+    JSON_ARRAY('required', 'private'),
+    0,  -- supports_conditions (dynamic zones typically don't support conditions)
+    0,  -- supports_translations (dynamic zones typically don't support localization)
+    1,  -- supports_relations (dynamic zones can contain components which may have relations)
+    1,  -- is_system
+    1,  -- is_active
+    15  -- sort_order (after Component to ensure separate row)
 );
 
 -- =============================================================================

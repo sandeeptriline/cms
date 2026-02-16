@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import * as z from 'zod'
 import {
   Dialog,
   DialogContent,
@@ -13,60 +12,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
 import { 
   Loader2, 
   ArrowLeft,
-  Type,
-  Hash,
-  Calendar,
-  Image as ImageIcon,
-  Link2,
-  FileText,
-  ToggleLeft,
-  Braces,
-  Mail,
-  Key,
-  List,
-  KeyRound,
-  Blocks,
-  Puzzle,
-  Infinity,
-  Plus,
-  ArrowRight,
-  ArrowLeftRight,
-  ChevronDown,
-  GitBranch,
-  Network,
-  Share2,
 } from 'lucide-react'
+import { iconLibrary, getIconComponent } from '@/lib/utils/icon-library'
 import { contentTypesApi, CreateFieldDto } from '@/lib/api/content-types'
 import { formElementsApi, FormElement } from '@/lib/api/form-elements'
 import { useToast } from '@/lib/hooks/use-toast'
 import { Badge } from '@/components/ui/badge'
-
-const fieldConfigurationSchema = z.object({
-  field: z.string().min(1, 'Field name is required').max(64, 'Field name must be less than 64 characters'),
-  required: z.boolean().default(false),
-  hidden: z.boolean().default(false),
-  readonly: z.boolean().default(false),
-  private: z.boolean().default(false),
-  localized: z.boolean().default(false),
-  note: z.string().optional(),
-  variant: z.string().optional(),
-  minLength: z.number().optional().nullable(),
-  maxLength: z.number().optional().nullable(),
-  defaultValue: z.string().optional(),
-  allowedTypes: z.array(z.string()).optional(),
-  // Relation-specific fields
-  relationType: z.string().optional(),
-  targetCollection: z.string().optional(),
-  targetFieldName: z.string().optional(),
-})
-
-type FieldConfigurationFormData = z.infer<typeof fieldConfigurationSchema>
+import { FieldFormRenderer } from './field-forms'
+import { fieldConfigurationSchema, FieldConfigurationFormData } from './field-forms/types'
 
 interface AddFieldModalProps {
   open: boolean
@@ -77,82 +33,6 @@ interface AddFieldModalProps {
 }
 
 type ViewMode = 'selection' | 'configuration'
-
-// Icon mapping: Maps icon name strings to lucide-react icon components
-const iconMap: Record<string, React.ComponentType<{ className?: string; size?: number }>> = {
-  // Text types
-  Type,
-  Aa: Type, // Alias for Type icon
-  
-  // Number types
-  Hash,
-  '123': Hash, // Alias for Hash icon
-  
-  // Date types
-  Calendar,
-  
-  // Media types
-  Image: ImageIcon,
-  ImageIcon,
-  
-  // Relation types
-  Link: Link2,
-  Link2,
-  
-  // Rich text types
-  FileText,
-  Blocks,
-  
-  // Component
-  Puzzle,
-  
-  // Boolean
-  ToggleLeft,
-  ToggleRight: ToggleLeft,
-  
-  // JSON
-  Braces,
-  '{}': Braces, // Alias for Braces icon
-  
-  // Email
-  Mail,
-  '@': Mail, // Alias for Mail icon
-  
-  // Password
-  Key,
-  Lock: Key,
-  
-  // Enumeration
-  List,
-  
-  // UID
-  KeyRound,
-  
-  // Dynamic zone
-  Infinity,
-}
-
-/**
- * Get icon component from icon name string
- */
-function getIconComponent(iconName: string | null | undefined): React.ComponentType<{ className?: string; size?: number }> | null {
-  if (!iconName) return null
-  
-  // Try exact match first
-  if (iconMap[iconName]) {
-    return iconMap[iconName]
-  }
-  
-  // Try case-insensitive match
-  const lowerIconName = iconName.toLowerCase()
-  for (const [key, Icon] of Object.entries(iconMap)) {
-    if (key.toLowerCase() === lowerIconName) {
-      return Icon
-    }
-  }
-  
-  return null
-}
 
 export function AddFieldModal({
   open,
@@ -171,6 +51,10 @@ export function AddFieldModal({
   const [settingsTab, setSettingsTab] = useState<'BASIC' | 'ADVANCED'>('BASIC')
   const [contentTypes, setContentTypes] = useState<any[]>([])
   const [loadingContentTypes, setLoadingContentTypes] = useState(false)
+  // Component-specific state
+  const [componentStep, setComponentStep] = useState<1 | 2>(1)
+  const [componentIconSearch, setComponentIconSearch] = useState('')
+  const [availableComponents, setAvailableComponents] = useState<any[]>([])
 
   const {
     register,
@@ -187,6 +71,9 @@ export function AddFieldModal({
       readonly: false,
       private: false,
       localized: false,
+      unique: false,
+      minLengthEnabled: false,
+      maxLengthEnabled: false,
       allowedTypes: [],
     },
   })
@@ -197,9 +84,19 @@ export function AddFieldModal({
       loadContentTypes()
       setViewMode('selection')
       setSelectedFormElement(null)
+      setComponentStep(1)
+      setComponentIconSearch('')
+      setSettingsTab('BASIC')
       reset()
     }
   }, [open, reset])
+
+  // Reset to BASIC tab when component step changes to 1
+  useEffect(() => {
+    if (selectedFormElement?.key === 'component' && componentStep === 1) {
+      setSettingsTab('BASIC')
+    }
+  }, [componentStep, selectedFormElement])
 
   const loadContentTypes = async () => {
     try {
@@ -238,6 +135,11 @@ export function AddFieldModal({
   const handleSelectField = (formElement: FormElement) => {
     setSelectedFormElement(formElement)
     setViewMode('configuration')
+    // Reset component-specific state
+    if (formElement.key === 'component') {
+      setComponentStep(1)
+      setComponentIconSearch('')
+    }
     reset({
       field: '',
       required: false,
@@ -245,48 +147,95 @@ export function AddFieldModal({
       readonly: false,
       private: formElement.default_settings?.private || false,
       localized: false,
+      unique: false,
+      minLengthEnabled: false,
+      maxLengthEnabled: false,
       note: '',
       variant: formElement.default_variant || undefined,
       minLength: formElement.validation_rules?.minLength || undefined,
       maxLength: formElement.validation_rules?.maxLength || undefined,
       defaultValue: formElement.interface?.defaultValue || undefined,
+      regexPattern: formElement.interface?.regexPattern || undefined,
       allowedTypes: formElement.default_settings?.allowedTypes || formElement.interface?.settings?.allowedTypes || [],
+      // Component defaults
+      componentType: 'create',
+      componentDisplayName: '',
+      componentCategory: '',
+      componentIcon: 'Puzzle',
+      componentRepeatable: false,
     })
   }
 
   const handleBackToSelection = () => {
     setViewMode('selection')
     setSelectedFormElement(null)
+    setComponentStep(1)
+    setComponentIconSearch('')
     reset()
   }
 
-  const required = watch('required')
-  const hidden = watch('hidden')
-  const readonly = watch('readonly')
-  const privateField = watch('private')
-  const localized = watch('localized')
-  const selectedVariant = watch('variant')
-  const allowedTypes = watch('allowedTypes') || []
-  const relationType = watch('relationType') || 'oneWay'
-  const targetCollection = watch('targetCollection')
-  const targetFieldName = watch('targetFieldName')
-  
-  // Get relation type configuration
-  const relationTypeConfig = selectedFormElement?.interface?.relationTypes?.find(
-    (rt: any) => rt.key === relationType
-  )
-  
-  // Get relation description
-  const getRelationDescription = () => {
-    if (!contentTypeName || !targetCollection) return ''
-    const targetType = contentTypes.find(ct => ct.id === targetCollection || ct.collection === targetCollection)
-    const targetName = targetType?.name || targetCollection
-    const relationLabel = relationTypeConfig?.label || 'has one'
-    return `${contentTypeName} ${relationLabel} ${targetName}`
+  const handleComponentStep1Next = () => {
+    const componentType = watch('componentType')
+    const displayName = watch('componentDisplayName')
+    const category = watch('componentCategory')
+    
+    // Validation for step 1
+    if (componentType === 'create') {
+      if (!displayName || displayName.trim() === '') {
+        toast({
+          title: 'Error',
+          description: 'Display name is required',
+          variant: 'destructive',
+        })
+        return
+      }
+      if (!category || category.trim() === '') {
+        toast({
+          title: 'Error',
+          description: 'Category is required',
+          variant: 'destructive',
+        })
+        return
+      }
+    } else {
+      // For existing component, we need componentId
+      const componentId = watch('componentId')
+      if (!componentId) {
+        toast({
+          title: 'Error',
+          description: 'Please select a component',
+          variant: 'destructive',
+        })
+        return
+      }
+    }
+    
+    setComponentStep(2)
+  }
+
+  const handleComponentStep2Back = () => {
+    setComponentStep(1)
   }
 
   const onSubmit = async (data: FieldConfigurationFormData) => {
     if (!selectedFormElement) return
+
+    // Component field validation
+    if (selectedFormElement.key === 'component') {
+      if (componentStep === 1) {
+        handleComponentStep1Next()
+        return
+      }
+      // Step 2 validation
+      if (!data.field || data.field.trim() === '') {
+        toast({
+          title: 'Error',
+          description: 'Field name is required',
+          variant: 'destructive',
+        })
+        return
+      }
+    }
 
     try {
       setSaving(true)
@@ -307,6 +256,8 @@ export function AddFieldModal({
           allowedTypes: data.allowedTypes && data.allowedTypes.length > 0 ? data.allowedTypes : (selectedFormElement.default_settings?.allowedTypes || selectedFormElement.interface?.settings?.allowedTypes),
           private: data.private,
           localized: data.localized,
+          unique: data.unique,
+          regexPattern: data.regexPattern,
           // Relation-specific options
           ...(selectedFormElement.key === 'relation' && {
             relationType: data.relationType || 'oneWay',
@@ -314,12 +265,32 @@ export function AddFieldModal({
             targetFieldName: data.targetFieldName,
             sourceCollection: contentTypeId,
           }),
+          // Component-specific options
+          ...(selectedFormElement.key === 'component' && {
+            componentType: data.componentType,
+            componentDisplayName: data.componentDisplayName,
+            componentCategory: data.componentCategory,
+            componentIcon: data.componentIcon,
+            componentId: data.componentId,
+            componentRepeatable: data.componentRepeatable,
+            // Store component metadata for new components
+            ...(data.componentType === 'create' && {
+              componentMetadata: {
+                displayName: data.componentDisplayName,
+                category: data.componentCategory,
+                icon: data.componentIcon,
+                repeatable: data.componentRepeatable,
+              },
+            }),
+          }),
         },
         validation: {
           ...selectedFormElement.validation_rules,
           required: data.required,
-          minLength: data.minLength,
-          maxLength: data.maxLength,
+          unique: data.unique,
+          minLength: data.minLengthEnabled ? data.minLength : undefined,
+          maxLength: data.maxLengthEnabled ? data.maxLength : undefined,
+          regexPattern: data.regexPattern,
         },
         required: data.required,
         hidden: data.hidden,
@@ -333,6 +304,8 @@ export function AddFieldModal({
         description: 'Field added successfully',
       })
       reset()
+      setComponentStep(1)
+      setComponentIconSearch('')
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -361,9 +334,28 @@ export function AddFieldModal({
   }
 
   // Filter form elements by tab
-  const defaultElements = formElements.filter((fe) => fe.is_system)
-  const customElements = formElements.filter((fe) => !fe.is_system)
+  const defaultElements = formElements.filter((fe) => fe.is_system).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+  const customElements = formElements.filter((fe) => !fe.is_system).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const displayElements = activeTab === 'DEFAULT' ? defaultElements : customElements
+  
+  // Separate into two sections:
+  // Section 1: Regular fields (text, rich text blocks, number, date, media, relation, rich text markdown, boolean, json, email, password, enumeration, UID)
+  // Section 2: Component and Dynamic Zone
+  const section1Fields = ['text', 'rich_text_blocks', 'number', 'date', 'media', 'relation', 'markdown', 'boolean', 'json', 'email', 'password', 'enumeration', 'uid']
+  const section2Fields = ['component', 'dynamic_zone']
+  
+  const section1Elements = displayElements.filter((fe) => section1Fields.includes(fe.key)).sort((a, b) => {
+    const aIndex = section1Fields.indexOf(a.key)
+    const bIndex = section1Fields.indexOf(b.key)
+    return aIndex - bIndex
+  })
+  
+  const section2Elements = displayElements.filter((fe) => section2Fields.includes(fe.key)).sort((a, b) => {
+    const aIndex = section2Fields.indexOf(a.key)
+    const bIndex = section2Fields.indexOf(b.key)
+    return aIndex - bIndex
+  })
+
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -421,65 +413,139 @@ export function AddFieldModal({
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {displayElements.map((element) => {
-                  // Get icon color or use default based on category
-                  const getIconColor = () => {
-                    if (element.icon_color) return element.icon_color
-                    // Default colors based on category
-                    const colorMap: Record<string, string> = {
-                      basic: '#4CAF50', // Green
-                      advanced: '#2196F3', // Blue
-                      media: '#9C27B0', // Purple
-                      relation: '#2196F3', // Blue
-                    }
-                    return colorMap[element.category || ''] || '#9333EA'
-                  }
-                  
-                  const iconColor = getIconColor()
-                  
-                  const IconComponent = getIconComponent(element.icon)
-                  
-                  return (
-                    <button
-                      key={element.id}
-                      onClick={() => handleSelectField(element)}
-                      className="border rounded-lg p-2 text-left hover:border-primary hover:shadow-sm transition-all cursor-pointer group bg-background"
-                    >
-                      <div className="flex items-start gap-2">
-                        <div
-                          className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                          style={{ 
-                            backgroundColor: `${iconColor}20`,
-                          }}
-                        >
-                          {IconComponent ? (
-                            <div style={{ color: iconColor }}>
-                              <IconComponent className="h-3.5 w-3.5" />
+              <div className="space-y-6">
+                {/* Section 1: Regular Fields */}
+                {section1Elements.length > 0 && (
+                  <div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {section1Elements.map((element) => {
+                        // Get icon color or use default based on category
+                        const getIconColor = () => {
+                          if (element.icon_color) return element.icon_color
+                          // Default colors based on category
+                          const colorMap: Record<string, string> = {
+                            basic: '#4CAF50', // Green
+                            advanced: '#2196F3', // Blue
+                            media: '#9C27B0', // Purple
+                            relation: '#2196F3', // Blue
+                          }
+                          return colorMap[element.category || ''] || '#9333EA'
+                        }
+                        
+                        const iconColor = getIconColor()
+                        const IconComponent = getIconComponent(element.icon)
+                        
+                        return (
+                          <button
+                            key={element.id}
+                            onClick={() => handleSelectField(element)}
+                            className="border rounded-lg p-2 text-left hover:border-primary hover:shadow-sm transition-all cursor-pointer group bg-background"
+                          >
+                            <div className="flex items-start gap-2">
+                              <div
+                                className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ 
+                                  backgroundColor: `${iconColor}20`,
+                                }}
+                              >
+                                {IconComponent ? (
+                                  <div style={{ color: iconColor }}>
+                                    <IconComponent className="h-3.5 w-3.5" />
+                                  </div>
+                                ) : (
+                                  <span className="text-sm">📝</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0 pt-0.5">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">
+                                    {element.name}
+                                  </h3>
+                                  {element.is_system && (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal bg-muted text-muted-foreground">
+                                      System
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                  {element.description || 'No description available'}
+                                </p>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-sm">📝</span>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">
-                              {element.name}
-                            </h3>
-                            {element.is_system && (
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal bg-muted text-muted-foreground">
-                                System
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                            {element.description || 'No description available'}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  )
-                })}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 2: Component and Dynamic Zone */}
+                {section2Elements.length > 0 && (
+                  <div>
+                    <div className="mb-3">
+                      <div className="h-px bg-border"></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {section2Elements.map((element) => {
+                        // Get icon color or use default based on category
+                        const getIconColor = () => {
+                          if (element.icon_color) return element.icon_color
+                          // Default colors based on category
+                          const colorMap: Record<string, string> = {
+                            basic: '#4CAF50', // Green
+                            advanced: '#2196F3', // Blue
+                            media: '#9C27B0', // Purple
+                            relation: '#2196F3', // Blue
+                          }
+                          return colorMap[element.category || ''] || '#9333EA'
+                        }
+                        
+                        const iconColor = getIconColor()
+                        const IconComponent = getIconComponent(element.icon)
+                        
+                        return (
+                          <button
+                            key={element.id}
+                            onClick={() => handleSelectField(element)}
+                            className="border rounded-lg p-2 text-left hover:border-primary hover:shadow-sm transition-all cursor-pointer group bg-background"
+                          >
+                            <div className="flex items-start gap-2">
+                              <div
+                                className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
+                                style={{ 
+                                  backgroundColor: `${iconColor}20`,
+                                }}
+                              >
+                                {IconComponent ? (
+                                  <div style={{ color: iconColor }}>
+                                    <IconComponent className="h-3.5 w-3.5" />
+                                  </div>
+                                ) : (
+                                  <span className="text-sm">📝</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0 pt-0.5">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">
+                                    {element.name}
+                                  </h3>
+                                  {element.is_system && (
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 font-normal bg-muted text-muted-foreground">
+                                      System
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                                  {element.description || 'No description available'}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -523,7 +589,10 @@ export function AddFieldModal({
                 )}
               </div>
               <DialogTitle>
-                Add new {selectedFormElement?.name || 'field'} field
+                {selectedFormElement?.key === 'component' 
+                  ? `Add new component (${componentStep}/2)`
+                  : `Add new ${selectedFormElement?.name || 'field'} field`
+                }
               </DialogTitle>
               <DialogDescription>
                 {selectedFormElement?.description || 'Configure the field settings'}
@@ -543,12 +612,17 @@ export function AddFieldModal({
                 BASIC SETTINGS
               </button>
               <button
-                onClick={() => setSettingsTab('ADVANCED')}
+                onClick={() => {
+                  if (!(selectedFormElement?.key === 'component' && componentStep === 1)) {
+                    setSettingsTab('ADVANCED')
+                  }
+                }}
+                disabled={selectedFormElement?.key === 'component' && componentStep === 1}
                 className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
                   settingsTab === 'ADVANCED'
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 ADVANCED SETTINGS
               </button>
@@ -556,412 +630,30 @@ export function AddFieldModal({
 
             <form onSubmit={handleSubmit(onSubmit)}>
               <div className="space-y-4 py-4">
-                {settingsTab === 'BASIC' && selectedFormElement && (
-                  <>
-                    {/* Field Name */}
-                    <div className="space-y-2">
-                      <Label htmlFor="field">
-                        Name <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="field"
-                        placeholder="title"
-                        {...register('field')}
-                        disabled={saving}
-                      />
-                      {errors.field && (
-                        <p className="text-sm text-destructive">{errors.field.message}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        No space is allowed for the name of the attribute
-                      </p>
-                    </div>
-
-                    {/* Variant Selection */}
-                    {selectedFormElement.variants && selectedFormElement.variants.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Type</Label>
-                        <div className="space-y-2">
-                          {selectedFormElement.variants.map((variant: any) => (
-                            <div key={variant.key} className="flex items-start space-x-2">
-                              <input
-                                type="radio"
-                                id={`variant-${variant.key}`}
-                                value={variant.key}
-                                checked={selectedVariant === variant.key}
-                                onChange={(e) => setValue('variant', e.target.value)}
-                                disabled={saving}
-                                className="mt-1"
-                              />
-                              <div className="flex-1">
-                                <Label
-                                  htmlFor={`variant-${variant.key}`}
-                                  className="font-normal cursor-pointer"
-                                >
-                                  {variant.name}
-                                </Label>
-                                <p className="text-xs text-muted-foreground">
-                                  {variant.description}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Relation Field Configuration */}
-                    {selectedFormElement.key === 'relation' && (
-                      <div className="space-y-4">
-                        {/* Two Entity Cards with Relation Type Selector */}
-                        <div className="flex items-center gap-4">
-                          {/* Source Entity Card */}
-                          <div className="flex-1 border rounded-lg p-4 space-y-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                                <Link2 className="h-4 w-4 text-primary" />
-                              </div>
-                              <span className="font-medium">{contentTypeName}</span>
-                            </div>
-                            <div className="border-t pt-3">
-                              <Label htmlFor="sourceFieldName" className="text-sm">
-                                Field name
-                              </Label>
-                              <Input
-                                id="sourceFieldName"
-                                {...register('field')}
-                                placeholder="article"
-                                disabled={saving}
-                                className="mt-1"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Relation Type Icons Row - Vertically Centered */}
-                          <div className="flex flex-col items-center justify-center gap-2">
-                            <div className="flex items-center gap-1">
-                              {selectedFormElement.interface?.relationTypes?.map((rt: any) => {
-                                const isSelected = relationType === rt.key
-                                const getRelationIcon = () => {
-                                  switch(rt.key) {
-                                    case 'oneWay':
-                                      return <ArrowRight className="h-4 w-4" />
-                                    case 'oneToOne':
-                                      return <ArrowLeftRight className="h-4 w-4" />
-                                    case 'oneToMany':
-                                      return <GitBranch className="h-4 w-4" />
-                                    case 'manyToOne':
-                                      return <GitBranch className="h-4 w-4 rotate-180" />
-                                    case 'manyToMany':
-                                      return <Network className="h-4 w-4" />
-                                    case 'manyWay':
-                                      return <Share2 className="h-4 w-4" />
-                                    default:
-                                      return <ArrowRight className="h-4 w-4" />
-                                  }
-                                }
-                                return (
-                                  <button
-                                    key={rt.key}
-                                    type="button"
-                                    onClick={() => setValue('relationType', rt.key)}
-                                    disabled={saving}
-                                    className={`
-                                      p-1.5 border rounded transition-colors
-                                      ${isSelected 
-                                        ? 'border-primary bg-primary text-white' 
-                                        : 'border-gray-200 hover:border-gray-300 bg-white'
-                                      }
-                                      disabled:opacity-50 disabled:cursor-not-allowed
-                                    `}
-                                    title={rt.label}
-                                    aria-label={rt.label}
-                                  >
-                                    {getRelationIcon()}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                            {/* Relation Description Text */}
-                            {relationTypeConfig && (
-                              <p className="text-xs text-muted-foreground text-center whitespace-nowrap">
-                                {relationTypeConfig.label}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Target Entity Card */}
-                          <div className="flex-1 border rounded-lg p-4 space-y-3">
-                            <div className="flex items-center gap-2">
-                              <div className="relative flex-1">
-                                <select
-                                  {...register('targetCollection')}
-                                  disabled={saving || loadingContentTypes}
-                                  className="w-full px-3 py-2 border rounded-md bg-white text-sm appearance-none pr-8"
-                                >
-                                  <option value="">Select collection...</option>
-                                  {contentTypes
-                                    .filter(ct => ct.id !== contentTypeId)
-                                    .map((ct) => (
-                                      <option key={ct.id} value={ct.id}>
-                                        {ct.name}
-                                      </option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                              </div>
-                            </div>
-                            <div className="border-t pt-3">
-                              <Label htmlFor="targetFieldName" className="text-sm">
-                                Field name
-                              </Label>
-                              <Input
-                                id="targetFieldName"
-                                {...register('targetFieldName')}
-                                placeholder=""
-                                disabled={saving || !targetCollection}
-                                className="mt-1"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Relation Description */}
-                        {relationTypeConfig && targetCollection && (
-                          <div className="text-center py-2">
-                            <p className="text-sm text-muted-foreground">
-                              <span className="font-medium">{contentTypeName}</span>
-                              {' '}
-                              <span>{relationTypeConfig.label}</span>
-                              {' '}
-                              <span className="font-medium">
-                                {contentTypes.find(ct => ct.id === targetCollection || ct.collection === targetCollection)?.name || targetCollection}
-                              </span>
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Field Options */}
-                    <div className="space-y-3">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="required"
-                          checked={required}
-                          onCheckedChange={(checked) => setValue('required', checked === true)}
-                          disabled={saving}
-                        />
-                        <Label htmlFor="required" className="font-normal cursor-pointer">
-                          Required field
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="hidden"
-                          checked={hidden}
-                          onCheckedChange={(checked) => setValue('hidden', checked === true)}
-                          disabled={saving}
-                        />
-                        <Label htmlFor="hidden" className="font-normal cursor-pointer">
-                          Hidden field
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="readonly"
-                          checked={readonly}
-                          onCheckedChange={(checked) => setValue('readonly', checked === true)}
-                          disabled={saving}
-                        />
-                        <Label htmlFor="readonly" className="font-normal cursor-pointer">
-                          Read-only field
-                        </Label>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {settingsTab === 'ADVANCED' && selectedFormElement && (
-                  <div className="space-y-4">
-                    <div className="text-sm text-muted-foreground">
-                      Advanced settings for {selectedFormElement.name} field
-                    </div>
-                    
-                    {selectedFormElement.available_settings && selectedFormElement.available_settings.length > 0 && (
-                      <div className="space-y-3">
-                        {selectedFormElement.available_settings.includes('minLength') && (
-                          <div className="space-y-2">
-                            <Label htmlFor="minLength">Minimum Length</Label>
-                            <Input
-                              id="minLength"
-                              type="number"
-                              {...register('minLength', { valueAsNumber: true })}
-                              disabled={saving}
-                            />
-                          </div>
-                        )}
-                        {selectedFormElement.available_settings.includes('maxLength') && (
-                          <div className="space-y-2">
-                            <Label htmlFor="maxLength">Maximum Length</Label>
-                            <Input
-                              id="maxLength"
-                              type="number"
-                              {...register('maxLength', { valueAsNumber: true })}
-                              disabled={saving}
-                            />
-                          </div>
-                        )}
-                        {selectedFormElement.available_settings.includes('defaultValue') && (
-                          <div className="space-y-2">
-                            <Label htmlFor="defaultValue">Default Value</Label>
-                            <Input
-                              id="defaultValue"
-                              {...register('defaultValue')}
-                              disabled={saving}
-                            />
-                          </div>
-                        )}
-                        {selectedFormElement.available_settings.includes('allowedTypes') && (
-                          <div className="space-y-2">
-                            <Label>Select allowed types of media</Label>
-                            <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
-                              {selectedFormElement.interface?.allowedTypesOptions?.map((option: any) => (
-                                <div key={option.key} className="flex items-start space-x-2">
-                                  <Checkbox
-                                    id={`allowedType-${option.key}`}
-                                    checked={allowedTypes.includes(option.key)}
-                                    onCheckedChange={(checked) => {
-                                      const currentTypes = allowedTypes || []
-                                      if (checked) {
-                                        setValue('allowedTypes', [...currentTypes, option.key])
-                                      } else {
-                                        setValue('allowedTypes', currentTypes.filter((t: string) => t !== option.key))
-                                      }
-                                    }}
-                                    disabled={saving}
-                                    className="mt-0.5"
-                                  />
-                                  <Label
-                                    htmlFor={`allowedType-${option.key}`}
-                                    className="font-normal cursor-pointer flex-1"
-                                  >
-                                    {option.label}
-                                  </Label>
-                                </div>
-                              )) || (
-                                <div className="text-sm text-muted-foreground">
-                                  No media type options available
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Settings Section */}
-                    <div className="space-y-4 pt-4 border-t">
-                      <div className="text-sm font-medium">Settings</div>
-                      <div className="space-y-4">
-                        {/* Required Field */}
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="required-advanced"
-                              checked={required}
-                              onCheckedChange={(checked) => setValue('required', checked === true)}
-                              disabled={saving}
-                            />
-                            <Label htmlFor="required-advanced" className="font-normal cursor-pointer">
-                              Required field
-                            </Label>
-                          </div>
-                          <p className="text-xs text-muted-foreground ml-6">
-                            You won't be able to create an entry if this field is empty
-                          </p>
-                        </div>
-
-                        {/* Private Field */}
-                        {selectedFormElement.available_settings?.includes('private') && (
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="private"
-                                checked={privateField}
-                                onCheckedChange={(checked) => setValue('private', checked === true)}
-                                disabled={saving}
-                              />
-                              <Label htmlFor="private" className="font-normal cursor-pointer">
-                                Private field
-                              </Label>
-                            </div>
-                            <p className="text-xs text-muted-foreground ml-6">
-                              This field will not show up in the API response
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Enable Localization */}
-                        {selectedFormElement.supports_translations && (
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id="localized"
-                                checked={localized}
-                                onCheckedChange={(checked) => setValue('localized', checked === true)}
-                                disabled={saving}
-                              />
-                              <Label htmlFor="localized" className="font-normal cursor-pointer">
-                                Enable localization for this field
-                              </Label>
-                            </div>
-                            <p className="text-xs text-muted-foreground ml-6">
-                              The field can have different values in each language
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Condition Section */}
-                    {selectedFormElement.supports_conditions && (
-                      <div className="space-y-2 pt-4 border-t">
-                        <Label>Condition</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Toggle field settings depending on the value of another boolean or enumeration field.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // TODO: Implement condition modal
-                            toast({
-                              title: 'Coming soon',
-                              description: 'Condition feature will be available soon',
-                            })
-                          }}
-                          disabled={saving}
-                          className="w-full justify-start"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Apply condition
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Note Section */}
-                    <div className="space-y-2 pt-4 border-t">
-                      <Label htmlFor="note">Note (optional)</Label>
-                      <Input
-                        id="note"
-                        placeholder="Field description"
-                        {...register('note')}
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
+                {selectedFormElement && (
+                  <FieldFormRenderer
+                    formElement={selectedFormElement}
+                    form={{
+                      register,
+                      handleSubmit,
+                      formState: { errors },
+                      reset,
+                      watch,
+                      setValue,
+                    } as any}
+                    saving={saving}
+                    settingsTab={settingsTab}
+                    contentTypeName={contentTypeName}
+                    contentTypeId={contentTypeId}
+                    contentTypes={contentTypes}
+                    loadingContentTypes={loadingContentTypes}
+                    componentStep={componentStep}
+                    onComponentStep1Next={handleComponentStep1Next}
+                    onComponentStep2Back={handleComponentStep2Back}
+                    componentIconSearch={componentIconSearch}
+                    onComponentIconSearchChange={setComponentIconSearch}
+                    availableComponents={availableComponents}
+                  />
                 )}
               </div>
 
@@ -969,24 +661,49 @@ export function AddFieldModal({
                 <Button type="button" variant="outline" onClick={handleClose} disabled={saving}>
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleAddAnother}
-                  disabled={saving}
-                >
-                  + Add another field
-                </Button>
-                <Button type="submit" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    'Finish'
-                  )}
-                </Button>
+                {selectedFormElement?.key === 'component' && componentStep === 1 ? (
+                  <Button
+                    type="button"
+                    onClick={handleComponentStep1Next}
+                    disabled={saving}
+                  >
+                    Configure the component
+                  </Button>
+                ) : (
+                  <>
+                    {selectedFormElement?.key === 'component' && componentStep === 2 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleComponentStep2Back}
+                        disabled={saving}
+                      >
+                        <ArrowLeft className="h-4 w-4 mr-2" />
+                        Back
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddAnother}
+                      disabled={saving}
+                    >
+                      + Add another field
+                    </Button>
+                    <Button type="submit" disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : selectedFormElement?.key === 'component' && componentStep === 2 ? (
+                        'Finish'
+                      ) : (
+                        'Finish'
+                      )}
+                    </Button>
+                  </>
+                )}
               </DialogFooter>
             </form>
           </>

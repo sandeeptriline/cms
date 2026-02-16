@@ -22,6 +22,16 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Database,
   Plus,
   Edit,
@@ -37,6 +47,7 @@ import {
 import { contentTypesApi, ContentType, ContentTypeField } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
 import { AddFieldModal } from './add-field-modal'
+import { EditFieldModal } from './edit-field-modal'
 import { EditContentTypeModal } from './edit-content-type-modal'
 import { getFieldTypeConfig } from './field-type-icons'
 
@@ -243,7 +254,11 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addFieldModalOpen, setAddFieldModalOpen] = useState(false)
+  const [editFieldModalOpen, setEditFieldModalOpen] = useState(false)
+  const [editingField, setEditingField] = useState<ContentTypeField | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
+  const [deleteFieldDialogOpen, setDeleteFieldDialogOpen] = useState(false)
+  const [fieldToDelete, setFieldToDelete] = useState<ContentTypeField | null>(null)
   const [fields, setFields] = useState<ContentTypeField[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -358,19 +373,50 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
   }
 
   const handleEditField = (field: ContentTypeField) => {
-    // TODO: Implement edit field modal
-    toast({
-      title: 'Info',
-      description: 'Edit field functionality coming soon',
-    })
+    setEditingField(field)
+    setEditFieldModalOpen(true)
   }
 
-  const handleDeleteField = async (field: ContentTypeField) => {
-    // TODO: Implement delete field API call
-    toast({
-      title: 'Info',
-      description: 'Delete field functionality coming soon',
-    })
+  const handleEditFieldSuccess = () => {
+    setEditFieldModalOpen(false)
+    setEditingField(null)
+    loadContentType()
+    if (onRefresh) {
+      onRefresh()
+    }
+  }
+
+  const handleDeleteField = (field: ContentTypeField) => {
+    setFieldToDelete(field)
+    setDeleteFieldDialogOpen(true)
+  }
+
+  const handleConfirmDeleteField = async () => {
+    if (!contentType || !fieldToDelete) return
+
+    try {
+      setSaving(true)
+      await contentTypesApi.deleteField(contentType.id, fieldToDelete.id)
+      toast({
+        title: 'Success',
+        description: 'Field deleted successfully',
+      })
+      setDeleteFieldDialogOpen(false)
+      setFieldToDelete(null)
+      await loadContentType()
+      if (onRefresh) {
+        onRefresh()
+      }
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({
+        title: 'Error',
+        description: e.message || 'Failed to delete field',
+        variant: 'destructive',
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) {
@@ -538,6 +584,18 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
           onSuccess={handleFieldAdded}
         />
 
+        {/* Edit Field Modal */}
+        {editingField && (
+          <EditFieldModal
+            open={editFieldModalOpen}
+            onOpenChange={setEditFieldModalOpen}
+            contentTypeId={contentType.id}
+            contentTypeName={contentType.name}
+            field={editingField}
+            onSuccess={handleEditFieldSuccess}
+          />
+        )}
+
         {/* Edit Modal with Delete */}
         <EditContentTypeModal
           open={editModalOpen}
@@ -547,6 +605,37 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
           onDelete={handleDeleteSuccess}
           showDeleteButton={true}
         />
+
+        {/* Delete Field Confirmation Dialog */}
+        <AlertDialog open={deleteFieldDialogOpen} onOpenChange={setDeleteFieldDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Field</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete the field "{fieldToDelete?.field}"? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={saving} onClick={() => setFieldToDelete(null)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteField}
+                disabled={saving}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )

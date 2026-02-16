@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../prisma/tenant-prisma.service';
 import { CreateContentTypeDto, CreateFieldDto } from './dto/create-content-type.dto';
 import { UpdateContentTypeDto } from './dto/update-content-type.dto';
+import { UpdateFieldDto } from './dto/update-field.dto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -449,6 +450,209 @@ export class ContentTypesService {
     );
 
     return { id: fieldId, ...fieldDto };
+  }
+
+  /**
+   * Update a field in a content type
+   */
+  async updateField(
+    tenantId: string,
+    contentTypeId: string,
+    fieldId: string,
+    updateDto: UpdateFieldDto,
+  ) {
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return this.tenantPrisma.withTenant(tenant.db_name, async (client) => {
+      // Verify content type exists
+      const contentType = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM content_types WHERE id = ?`,
+        contentTypeId
+      );
+
+      if (contentType.length === 0) {
+        throw new NotFoundException('Content type not found');
+      }
+
+      // Verify field exists
+      const existingField = await client.$queryRawUnsafe<Array<{ id: string; field: string }>>(
+        `SELECT id, field FROM fields WHERE id = ? AND content_type_id = ?`,
+        fieldId,
+        contentTypeId
+      );
+
+      if (existingField.length === 0) {
+        throw new NotFoundException('Field not found');
+      }
+
+      // If field name is being changed, check for duplicates
+      if (updateDto.field && updateDto.field !== existingField[0].field) {
+        const duplicate = await client.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM fields WHERE content_type_id = ? AND field = ? AND id != ?`,
+          contentTypeId,
+          updateDto.field,
+          fieldId
+        );
+
+        if (duplicate.length > 0) {
+          throw new BadRequestException(`Field "${updateDto.field}" already exists in this content type`);
+        }
+      }
+
+      // Build update query
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (updateDto.field !== undefined) {
+        updates.push('field = ?');
+        params.push(updateDto.field);
+      }
+      if (updateDto.type !== undefined) {
+        updates.push('type = ?');
+        params.push(updateDto.type);
+      }
+      if (updateDto.interface !== undefined) {
+        updates.push('interface = ?');
+        params.push(updateDto.interface || null);
+      }
+      if (updateDto.options !== undefined) {
+        updates.push('options = ?');
+        params.push(updateDto.options ? JSON.stringify(updateDto.options) : null);
+      }
+      if (updateDto.validation !== undefined) {
+        updates.push('validation = ?');
+        params.push(updateDto.validation ? JSON.stringify(updateDto.validation) : null);
+      }
+      if (updateDto.required !== undefined) {
+        updates.push('required = ?');
+        params.push(updateDto.required ? 1 : 0);
+      }
+      if (updateDto.hidden !== undefined) {
+        updates.push('hidden = ?');
+        params.push(updateDto.hidden ? 1 : 0);
+      }
+      if (updateDto.readonly !== undefined) {
+        updates.push('readonly = ?');
+        params.push(updateDto.readonly ? 1 : 0);
+      }
+      if (updateDto.sort !== undefined) {
+        updates.push('sort = ?');
+        params.push(updateDto.sort);
+      }
+      if (updateDto.note !== undefined) {
+        updates.push('note = ?');
+        params.push(updateDto.note || null);
+      }
+
+      if (updates.length > 0) {
+        updates.push('updated_at = NOW()');
+        params.push(fieldId, contentTypeId);
+
+        await client.$executeRawUnsafe(
+          `UPDATE fields SET ${updates.join(', ')} WHERE id = ? AND content_type_id = ?`,
+          ...params
+        );
+      }
+
+      // Get and return the updated field
+      type FieldRow = {
+        id: string;
+        field: string;
+        type: string;
+        interface: string | null;
+        options: string | null;
+        validation: string | null;
+        required: number;
+        hidden: number;
+        readonly: number;
+        sort: number | null;
+        note: string | null;
+        created_at: Date;
+        updated_at: Date;
+      };
+
+      const updatedField = await client.$queryRawUnsafe<FieldRow[]>(
+        `SELECT * FROM fields WHERE id = ? AND content_type_id = ?`,
+        fieldId,
+        contentTypeId
+      );
+
+      if (updatedField.length === 0) {
+        throw new NotFoundException('Field not found after update');
+      }
+
+      const field: FieldRow = updatedField[0];
+      return {
+        id: field.id,
+        field: field.field,
+        type: field.type,
+        interface: field.interface || undefined,
+        options: field.options ? JSON.parse(field.options) : undefined,
+        validation: field.validation ? JSON.parse(field.validation) : undefined,
+        required: field.required === 1,
+        hidden: field.hidden === 1,
+        readonly: field.readonly === 1,
+        sort: field.sort || undefined,
+        note: field.note || undefined,
+        created_at: field.created_at,
+        updated_at: field.updated_at,
+      };
+    });
+  }
+
+  /**
+   * Delete a field from a content type
+   */
+  async deleteField(
+    tenantId: string,
+    contentTypeId: string,
+    fieldId: string,
+  ) {
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return this.tenantPrisma.withTenant(tenant.db_name, async (client) => {
+      // Verify content type exists
+      const contentType = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM content_types WHERE id = ?`,
+        contentTypeId
+      );
+
+      if (contentType.length === 0) {
+        throw new NotFoundException('Content type not found');
+      }
+
+      // Verify field exists
+      const field = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM fields WHERE id = ? AND content_type_id = ?`,
+        fieldId,
+        contentTypeId
+      );
+
+      if (field.length === 0) {
+        throw new NotFoundException('Field not found');
+      }
+
+      // Delete the field
+      await client.$executeRawUnsafe(
+        `DELETE FROM fields WHERE id = ? AND content_type_id = ?`,
+        fieldId,
+        contentTypeId
+      );
+
+      return { success: true, message: 'Field deleted successfully' };
+    });
   }
 
   /**

@@ -63,6 +63,19 @@ export interface UpdateContentTypeDto {
   hidden?: boolean;
 }
 
+export interface UpdateFieldDto {
+  field?: string;
+  type?: string;
+  interface?: string;
+  options?: any;
+  validation?: any;
+  required?: boolean;
+  hidden?: boolean;
+  readonly?: boolean;
+  sort?: number;
+  note?: string;
+}
+
 export const contentTypesApi = {
   /**
    * Get all content types
@@ -112,6 +125,28 @@ export const contentTypesApi = {
       field
     );
     return response.data;
+  },
+
+  /**
+   * Update a field in a content type
+   */
+  async updateField(
+    contentTypeId: string,
+    fieldId: string,
+    field: UpdateFieldDto
+  ): Promise<ContentTypeField> {
+    const response = await apiClient.put<ContentTypeField>(
+      `/content-types/${contentTypeId}/fields/${fieldId}`,
+      field
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a field from a content type
+   */
+  async deleteField(contentTypeId: string, fieldId: string): Promise<void> {
+    await apiClient.delete(`/content-types/${contentTypeId}/fields/${fieldId}`);
   },
 
   /**

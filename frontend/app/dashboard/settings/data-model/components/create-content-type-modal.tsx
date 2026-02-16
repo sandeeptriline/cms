@@ -16,71 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
-import {
-  Loader2,
-  Type,
-  FileText,
-  Image,
-  Folder,
-  Database,
-  Settings,
-  User,
-  Users,
-  Mail,
-  Phone,
-  Calendar,
-  Clock,
-  MapPin,
-  Link2,
-  Tag,
-  Bookmark,
-  Star,
-  Heart,
-  ThumbsUp,
-  MessageSquare,
-  Bell,
-  Search,
-  Filter,
-  Grid,
-  List,
-  Layout,
-  BarChart,
-  PieChart,
-  TrendingUp,
-  ShoppingCart,
-  Package,
-  Truck,
-  CreditCard,
-  Wallet,
-  Building,
-  Home,
-  Globe,
-  Zap,
-  Lightbulb,
-  Flame,
-  Award,
-  Trophy,
-  Shield,
-  Lock,
-  Key,
-  Eye,
-  Camera,
-  Video,
-  Music,
-  Film,
-  Gamepad2,
-  Coffee,
-  Utensils,
-  Car,
-  Plane,
-  Ship,
-  Bike,
-} from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
+import { iconLibrary, getIconComponent, getDefaultIcon } from '@/lib/utils/icon-library'
 import { contentTypesApi, CreateContentTypeDto, ContentType } from '@/lib/api/content-types'
 import { useToast } from '@/lib/hooks/use-toast'
 
@@ -131,79 +68,16 @@ export function CreateContentTypeModal({
   const singleton = watch('singleton')
   const hidden = watch('hidden')
   const iconValue = watch('icon')
-  const [iconPickerOpen, setIconPickerOpen] = useState(false)
-
-  // Icon library - around 50 icons
-  const iconLibrary = [
-    { name: 'Type', component: Type },
-    { name: 'FileText', component: FileText },
-    { name: 'Image', component: Image },
-    { name: 'Folder', component: Folder },
-    { name: 'Database', component: Database },
-    { name: 'Settings', component: Settings },
-    { name: 'User', component: User },
-    { name: 'Users', component: Users },
-    { name: 'Mail', component: Mail },
-    { name: 'Phone', component: Phone },
-    { name: 'Calendar', component: Calendar },
-    { name: 'Clock', component: Clock },
-    { name: 'MapPin', component: MapPin },
-    { name: 'Link2', component: Link2 },
-    { name: 'Tag', component: Tag },
-    { name: 'Bookmark', component: Bookmark },
-    { name: 'Star', component: Star },
-    { name: 'Heart', component: Heart },
-    { name: 'ThumbsUp', component: ThumbsUp },
-    { name: 'MessageSquare', component: MessageSquare },
-    { name: 'Bell', component: Bell },
-    { name: 'Search', component: Search },
-    { name: 'Filter', component: Filter },
-    { name: 'Grid', component: Grid },
-    { name: 'List', component: List },
-    { name: 'Layout', component: Layout },
-    { name: 'BarChart', component: BarChart },
-    { name: 'PieChart', component: PieChart },
-    { name: 'TrendingUp', component: TrendingUp },
-    { name: 'ShoppingCart', component: ShoppingCart },
-    { name: 'Package', component: Package },
-    { name: 'Truck', component: Truck },
-    { name: 'CreditCard', component: CreditCard },
-    { name: 'Wallet', component: Wallet },
-    { name: 'Building', component: Building },
-    { name: 'Home', component: Home },
-    { name: 'Globe', component: Globe },
-    { name: 'Zap', component: Zap },
-    { name: 'Lightbulb', component: Lightbulb },
-    { name: 'Flame', component: Flame },
-    { name: 'Award', component: Award },
-    { name: 'Trophy', component: Trophy },
-    { name: 'Shield', component: Shield },
-    { name: 'Lock', component: Lock },
-    { name: 'Key', component: Key },
-    { name: 'Eye', component: Eye },
-    { name: 'Camera', component: Camera },
-    { name: 'Video', component: Video },
-    { name: 'Music', component: Music },
-    { name: 'Film', component: Film },
-    { name: 'Gamepad2', component: Gamepad2 },
-    { name: 'Coffee', component: Coffee },
-    { name: 'Utensils', component: Utensils },
-    { name: 'Car', component: Car },
-    { name: 'Plane', component: Plane },
-    { name: 'Ship', component: Ship },
-    { name: 'Bike', component: Bike },
-  ]
-
-  const getIconComponent = (iconName: string | null | undefined) => {
-    if (!iconName) return null
-    const icon = iconLibrary.find(i => i.name.toLowerCase() === iconName.toLowerCase())
-    return icon ? icon.component : null
-  }
+  const [iconSearchQuery, setIconSearchQuery] = useState('')
 
   const handleIconSelect = (iconName: string) => {
     setValue('icon', iconName)
-    setIconPickerOpen(false)
   }
+
+  // Filter icons based on search query
+  const filteredIcons = iconLibrary.filter((icon) =>
+    icon.name.toLowerCase().includes(iconSearchQuery.toLowerCase())
+  )
 
   const onSubmit = async (data: CreateContentTypeFormData) => {
     try {
@@ -247,7 +121,7 @@ export function CreateContentTypeModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[900px] max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>Create Content Type</DialogTitle>
           <DialogDescription>
@@ -290,80 +164,99 @@ export function CreateContentTypeModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="icon">Icon (optional)</Label>
-              <div className="flex gap-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="icon">Icon</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setValue('icon', '')
+                    setIconSearchQuery('')
+                  }}
+                  className="h-7 text-xs"
+                  disabled={saving}
+                >
+                  Clear
+                </Button>
+              </div>
+              
+              {/* Search Field */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  id="icon"
-                  placeholder="Select an icon or type name"
+                  type="text"
+                  placeholder="Search for an icon"
+                  value={iconSearchQuery}
+                  onChange={(e) => setIconSearchQuery(e.target.value)}
+                  disabled={saving}
+                  className="pl-9 pr-8"
+                  autoComplete="off"
+                />
+                {iconSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setIconSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground text-lg leading-none"
+                    disabled={saving}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Icon Grid */}
+              <div className="border rounded-md p-4 max-h-[150px] overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5">
+                  {filteredIcons.map((icon) => {
+                    const IconComponent = icon.component
+                    const isSelected = iconValue?.toLowerCase() === icon.name.toLowerCase()
+                    return (
+                      <label
+                        key={icon.name}
+                        className={`
+                          relative flex items-center justify-center w-8 h-8 p-0.5 rounded-md border transition-colors cursor-pointer flex-shrink-0
+                          ${isSelected 
+                            ? 'border-primary bg-primary/10 text-primary' 
+                            : 'border-gray-200 hover:border-primary hover:bg-primary/5'
+                          }
+                        `}
+                        title={icon.name}
+                      >
+                        <input
+                          type="radio"
+                          name="icon"
+                          value={icon.name}
+                          checked={isSelected}
+                          onChange={() => handleIconSelect(icon.name)}
+                          className="sr-only"
+                          disabled={saving}
+                        />
+                        <IconComponent className="h-4 w-4 flex-shrink-0" />
+                      </label>
+                    )
+                  })}
+                </div>
+                {filteredIcons.length === 0 && (
+                  <div className="text-center py-8 text-sm text-muted-foreground">
+                    No icons found matching "{iconSearchQuery}"
+                  </div>
+                )}
+              </div>
+              
+              {/* Manual Input (optional) */}
+              <div className="space-y-1">
+                <Label htmlFor="icon-manual" className="text-xs text-muted-foreground">
+                  Or type icon name manually
+                </Label>
+                <Input
+                  id="icon-manual"
+                  placeholder="e.g., FileText, Database, Settings"
                   {...register('icon')}
                   disabled={saving}
-                  className="flex-1"
                 />
-                <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={saving}
-                      className="px-3"
-                    >
-                      {iconValue && getIconComponent(iconValue) ? (
-                        (() => {
-                          const IconComponent = getIconComponent(iconValue)!
-                          return <IconComponent className="h-4 w-4" />
-                        })()
-                      ) : (
-                        <Grid className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-4" align="start">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium">Select Icon</Label>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setValue('icon', '')
-                            setIconPickerOpen(false)
-                          }}
-                          className="h-7 text-xs"
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-8 gap-2 max-h-[300px] overflow-y-auto">
-                        {iconLibrary.map((icon) => {
-                          const IconComponent = icon.component
-                          const isSelected = iconValue?.toLowerCase() === icon.name.toLowerCase()
-                          return (
-                            <button
-                              key={icon.name}
-                              type="button"
-                              onClick={() => handleIconSelect(icon.name)}
-                              className={`
-                                p-2 rounded-md border transition-colors
-                                ${isSelected 
-                                  ? 'border-primary bg-primary/10 text-primary' 
-                                  : 'border-gray-200 hover:border-primary hover:bg-primary/5'
-                                }
-                              `}
-                              title={icon.name}
-                            >
-                              <IconComponent className="h-5 w-5" />
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Select an icon from the library or type the icon name manually
-              </p>
             </div>
 
             <div className="space-y-2">
