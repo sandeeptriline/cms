@@ -48,11 +48,11 @@ export function SchemaFieldForm({
           <Input
             id="schemaDisplayName"
             placeholder=""
-            {...register('schemaDisplayName', { required: true })}
+            {...register('schemaDisplayName', { required: 'Display name is required' })}
             disabled={saving}
           />
           {errors.schemaDisplayName && (
-            <p className="text-sm text-destructive">This value is required.</p>
+            <p className="text-sm text-destructive">{errors.schemaDisplayName.message}</p>
           )}
         </div>
 
@@ -82,7 +82,7 @@ export function SchemaFieldForm({
                 </button>
               )}
             </div>
-            
+
             {/* Icon Grid */}
             <div className="border rounded-md p-4 max-h-[150px] overflow-y-auto">
               <div className="flex flex-wrap gap-1.5">
@@ -98,8 +98,8 @@ export function SchemaFieldForm({
                         key={icon.name}
                         className={`
                           relative flex items-center justify-center w-8 h-8 p-0.5 rounded-md border transition-colors cursor-pointer flex-shrink-0
-                          ${isSelected 
-                            ? 'border-primary bg-primary/10 text-primary' 
+                          ${isSelected
+                            ? 'border-primary bg-primary/10 text-primary'
                             : 'border-gray-200 hover:border-primary hover:bg-primary/5'
                           }
                         `}
@@ -156,8 +156,8 @@ export function SchemaFieldForm({
           <label
             className={`
               p-4 border rounded-lg cursor-pointer transition-colors
-              ${!schemaRepeatable 
-                ? 'border-primary bg-primary/5' 
+              ${!schemaRepeatable
+                ? 'border-primary bg-primary/5'
                 : 'border-gray-200 hover:border-gray-300'
               }
             `}
@@ -181,8 +181,8 @@ export function SchemaFieldForm({
           <label
             className={`
               p-4 border rounded-lg cursor-pointer transition-colors
-              ${schemaRepeatable 
-                ? 'border-primary bg-primary/5' 
+              ${schemaRepeatable
+                ? 'border-primary bg-primary/5'
                 : 'border-gray-200 hover:border-gray-300'
               }
             `}
@@ -230,7 +230,7 @@ export function SchemaFieldForm({
           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         </div>
         {errors.schemaId && (
-          <p className="text-sm text-destructive">This value is required.</p>
+          <p className="text-sm text-destructive">{errors.schemaId.message}</p>
         )}
         {currentDataModelId && (
           <p className="text-xs text-muted-foreground">

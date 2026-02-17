@@ -50,8 +50,8 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
                     key={variant.key}
                     className={`
                       p-4 border rounded-lg cursor-pointer transition-colors
-                      ${isSelected 
-                        ? 'border-primary bg-primary/5' 
+                      ${isSelected
+                        ? 'border-primary bg-primary/5'
                         : 'border-gray-200 hover:border-gray-300'
                       }
                     `}
@@ -100,6 +100,9 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
             rows={4}
             className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
+          {errors.defaultValue && (
+            <p className="text-xs text-destructive mt-1">{errors.defaultValue.message}</p>
+          )}
         </div>
 
         {/* RegExp pattern */}
@@ -111,6 +114,9 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
             disabled={saving}
             placeholder=""
           />
+          {errors.regexPattern && (
+            <p className="text-xs text-destructive mt-1">{errors.regexPattern.message}</p>
+          )}
           <p className="text-xs text-muted-foreground">
             The text of the regular expression
           </p>
@@ -188,6 +194,9 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
                     disabled={saving}
                     className="w-full"
                   />
+                  {errors.maxLength && (
+                    <p className="text-xs text-destructive mt-1">{errors.maxLength.message}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -222,6 +231,9 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
                     disabled={saving}
                     className="w-full"
                   />
+                  {errors.minLength && (
+                    <p className="text-xs text-destructive mt-1">{errors.minLength.message}</p>
+                  )}
                 </div>
               )}
             </div>

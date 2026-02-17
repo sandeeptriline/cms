@@ -46,8 +46,8 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
                     key={variant.key}
                     className={`
                       p-4 border rounded-lg cursor-pointer transition-colors
-                      ${isSelected 
-                        ? 'border-primary bg-primary/5' 
+                      ${isSelected
+                        ? 'border-primary bg-primary/5'
                         : 'border-gray-200 hover:border-gray-300'
                       }
                     `}
@@ -124,7 +124,7 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
       <div className="text-sm text-muted-foreground">
         Advanced settings for {formElement.name} field
       </div>
-      
+
       {/* Default value and other inputs in 2-column grid when applicable */}
       {formElement.available_settings?.includes('defaultValue') && (
         <div className="space-y-2">
@@ -136,6 +136,9 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
             rows={4}
             className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
+          {errors.defaultValue && (
+            <p className="text-xs text-destructive mt-1">{errors.defaultValue.message}</p>
+          )}
         </div>
       )}
 
@@ -243,6 +246,9 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
                     disabled={saving}
                     className="w-full"
                   />
+                  {errors.maxLength && (
+                    <p className="text-xs text-destructive mt-1">{errors.maxLength.message}</p>
+                  )}
                 </div>
               )}
             </div>
@@ -277,6 +283,9 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
                     disabled={saving}
                     className="w-full"
                   />
+                  {errors.minLength && (
+                    <p className="text-xs text-destructive mt-1">{errors.minLength.message}</p>
+                  )}
                 </div>
               )}
             </div>

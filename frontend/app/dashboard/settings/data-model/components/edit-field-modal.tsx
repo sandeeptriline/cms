@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { 
-  Loader2, 
+import {
+  Loader2,
   ArrowLeft,
 } from 'lucide-react'
 import { getIconComponent } from '@/lib/utils/icon-library'
@@ -59,6 +59,9 @@ export function EditFieldModal({
     reset,
     watch,
     setValue,
+    setError,
+    clearErrors,
+    trigger,
   } = useForm<FieldConfigurationFormData>({
     resolver: zodResolver(fieldConfigurationSchema),
     defaultValues: {
@@ -119,7 +122,7 @@ export function EditFieldModal({
       const element = allElements.find(
         (fe) => fe.key === field.interface || fe.type === field.type || fe.key === field.type
       )
-      
+
       if (!element) {
         toast({
           title: 'Error',
@@ -128,7 +131,7 @@ export function EditFieldModal({
         })
         return
       }
-      
+
       setFormElement(element)
     } catch (err: unknown) {
       const e = err as { message?: string }
@@ -183,19 +186,19 @@ export function EditFieldModal({
     })
   }
 
-  const handleSchemaStep1Next = () => {
+  const handleSchemaStep1Next = async () => {
     const displayName = watch('schemaDisplayName')
-    
+
     // Validation for step 1
     if (!displayName || displayName.trim() === '') {
-      toast({
-        title: 'Error',
-        description: 'Display name is required',
-        variant: 'destructive',
+      setError('schemaDisplayName', {
+        type: 'manual',
+        message: 'Display name is required',
       })
       return
     }
-    
+
+    clearErrors('schemaDisplayName')
     setSchemaStep(2)
   }
 
@@ -214,10 +217,9 @@ export function EditFieldModal({
       }
       // Step 2 validation
       if (!data.field || data.field.trim() === '') {
-        toast({
-          title: 'Error',
-          description: 'Field name is required',
-          variant: 'destructive',
+        setError('field', {
+          type: 'manual',
+          message: 'Field name is required',
         })
         return
       }
@@ -227,7 +229,7 @@ export function EditFieldModal({
       setSaving(true)
 
       const variant = formElement.variants?.find((v: any) => v.key === data.variant)
-      const interfaceConfig = variant?.component 
+      const interfaceConfig = variant?.component
         ? { ...formElement.interface, component: variant.component }
         : formElement.interface
 
@@ -306,6 +308,9 @@ export function EditFieldModal({
     return (
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Loading field configuration</DialogTitle>
+          </DialogHeader>
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             <span className="ml-2 text-muted-foreground">Loading field configuration...</span>
@@ -324,7 +329,7 @@ export function EditFieldModal({
               <>
                 <div
                   className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-                  style={{ 
+                  style={{
                     backgroundColor: `${formElement.icon_color || '#9333EA'}20`,
                   }}
                 >
@@ -347,7 +352,7 @@ export function EditFieldModal({
             )}
           </div>
           <DialogTitle>
-            {formElement?.key === 'schema' 
+            {formElement?.key === 'schema'
               ? `Edit schema (${schemaStep}/2)`
               : `Edit ${formElement?.name || 'field'} field`
             }
@@ -361,11 +366,10 @@ export function EditFieldModal({
         <div className="flex items-center gap-4 border-b mb-4">
           <button
             onClick={() => setSettingsTab('BASIC')}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              settingsTab === 'BASIC'
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${settingsTab === 'BASIC'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             BASIC SETTINGS
           </button>
@@ -376,11 +380,10 @@ export function EditFieldModal({
               }
             }}
             disabled={formElement?.key === 'schema' && schemaStep === 1}
-            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-              settingsTab === 'ADVANCED'
+            className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${settingsTab === 'ADVANCED'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             ADVANCED SETTINGS
           </button>

@@ -12,8 +12,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { 
-  Loader2, 
+import {
+  Loader2,
   ArrowLeft,
 } from 'lucide-react'
 import { iconLibrary, getIconComponent } from '@/lib/utils/icon-library'
@@ -55,6 +55,9 @@ export function AddFieldModal({
   const [schemaStep, setSchemaStep] = useState<1 | 2>(1)
   const [schemaIconSearch, setSchemaIconSearch] = useState('')
   const [availableDataModels, setAvailableDataModels] = useState<any[]>([])
+  // Dynamic Zone specific state
+  const [dynamicZoneStep, setDynamicZoneStep] = useState<1 | 2>(1)
+  const [selectedSchemas, setSelectedSchemas] = useState<string[]>([])
 
   const {
     register,
@@ -63,6 +66,9 @@ export function AddFieldModal({
     reset,
     watch,
     setValue,
+    setError,
+    clearErrors,
+    trigger,
   } = useForm<FieldConfigurationFormData>({
     resolver: zodResolver(fieldConfigurationSchema),
     defaultValues: {
@@ -86,6 +92,8 @@ export function AddFieldModal({
       setSelectedFormElement(null)
       setSchemaStep(1)
       setSchemaIconSearch('')
+      setDynamicZoneStep(1)
+      setSelectedSchemas([])
       setSettingsTab('BASIC')
       reset()
     }
@@ -142,6 +150,10 @@ export function AddFieldModal({
       setSchemaStep(1)
       setSchemaIconSearch('')
     }
+    if (formElement.key === 'dynamic_zone') {
+      setDynamicZoneStep(1)
+      setSelectedSchemas([])
+    }
     reset({
       field: '',
       required: false,
@@ -172,27 +184,47 @@ export function AddFieldModal({
     setSelectedFormElement(null)
     setSchemaStep(1)
     setSchemaIconSearch('')
+    setDynamicZoneStep(1)
+    setSelectedSchemas([])
     reset()
   }
 
-  const handleSchemaStep1Next = () => {
+  const handleSchemaStep1Next = async () => {
     const displayName = watch('schemaDisplayName')
-    
+
     // Validation for step 1
     if (!displayName || displayName.trim() === '') {
-      toast({
-        title: 'Error',
-        description: 'Display name is required',
-        variant: 'destructive',
+      setError('schemaDisplayName', {
+        type: 'manual',
+        message: 'Display name is required',
       })
       return
     }
-    
+
+    clearErrors('schemaDisplayName')
     setSchemaStep(2)
   }
 
   const handleSchemaStep2Back = () => {
     setSchemaStep(1)
+  }
+
+  const handleDynamicZoneStep1Next = async () => {
+    const field = watch('field')
+    // Validation for step 1
+    if (!field || field.trim() === '') {
+      setError('field', {
+        type: 'manual',
+        message: 'Field name is required',
+      })
+      return
+    }
+    clearErrors('field')
+    setDynamicZoneStep(2)
+  }
+
+  const handleDynamicZoneStep2Back = () => {
+    setDynamicZoneStep(1)
   }
 
   const onSubmit = async (data: FieldConfigurationFormData) => {
@@ -204,22 +236,59 @@ export function AddFieldModal({
         handleSchemaStep1Next()
         return
       }
+
       // Step 2 validation
-      if (!data.field || data.field.trim() === '') {
+      // Field name is handled by standard submit, but we double check or let handleSubmit handle it.
+      // Since field is required in schema, we assume it's valid if we are here? 
+      // YES, handleSubmit only calls onSubmit if schema validation passes.
+      // But verify if we have any custom logic.
+
+      // Schema ID validation (might be optional in Zod but required for logic)
+      if (!data.schemaId) {
+        setError('schemaId', {
+          type: 'manual',
+          message: 'Please select a data model',
+        })
+        return
+      }
+    }
+
+    // Dynamic Zone validation
+    if (selectedFormElement.key === 'dynamic_zone') {
+      if (dynamicZoneStep === 1) {
+        handleDynamicZoneStep1Next()
+        return
+      }
+
+      // Step 2 validation - ensure field name is set
+      // Use watch to get the current field value since it might not be in data when input is not visible
+      const fieldValue = data.field || watch('field') || ''
+      if (!fieldValue || fieldValue.trim() === '') {
+        setError('field', {
+          type: 'manual',
+          message: 'Field name is required',
+        })
+        // Switch back to step 1 to show the field name input
+        setDynamicZoneStep(1)
+        setSettingsTab('BASIC')
+        // Manually trigger validation to show the error
+        trigger('field')
+        return
+      }
+
+      // Step 2 validation - ensure at least one schema is selected
+      if (selectedSchemas.length === 0) {
         toast({
           title: 'Error',
-          description: 'Field name is required',
+          description: 'Please select at least one component',
           variant: 'destructive',
         })
         return
       }
-      if (!data.schemaId) {
-        toast({
-          title: 'Error',
-          description: 'Please select a data model',
-          variant: 'destructive',
-        })
-        return
+
+      // Ensure the field value is set in the form data
+      if (!data.field && fieldValue) {
+        setValue('field', fieldValue)
       }
     }
 
@@ -227,12 +296,15 @@ export function AddFieldModal({
       setSaving(true)
 
       const variant = selectedFormElement.variants?.find((v: any) => v.key === data.variant)
-      const interfaceConfig = variant?.component 
+      const interfaceConfig = variant?.component
         ? { ...selectedFormElement.interface, component: variant.component }
         : selectedFormElement.interface
 
+      // For dynamic zone, ensure we use the field value from watch if not in data
+      const fieldName = data.field || (selectedFormElement.key === 'dynamic_zone' ? watch('field') : '')
+      
       const fieldDto: CreateFieldDto = {
-        field: data.field,
+        field: fieldName,
         type: selectedFormElement.type,
         interface: interfaceConfig?.component || selectedFormElement.key,
         options: {
@@ -258,6 +330,10 @@ export function AddFieldModal({
             schemaId: data.schemaId,
             schemaRepeatable: data.schemaRepeatable,
           }),
+          // Dynamic Zone options
+          ...(selectedFormElement.key === 'dynamic_zone' && {
+            allowed_schemas: selectedSchemas,
+          }),
         },
         validation: {
           ...selectedFormElement.validation_rules,
@@ -281,6 +357,8 @@ export function AddFieldModal({
       reset()
       setSchemaStep(1)
       setSchemaIconSearch('')
+      setDynamicZoneStep(1)
+      setSelectedSchemas([])
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -304,6 +382,73 @@ export function AddFieldModal({
     }
   }
 
+  // Custom submit handler for dynamic zone at step 2
+  // This bypasses React Hook Form validation since the field input is not visible at step 2
+  const handleDynamicZoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!selectedFormElement || selectedFormElement.key !== 'dynamic_zone' || dynamicZoneStep !== 2) {
+      // Fallback to normal submit
+      handleSubmit(onSubmit)(e)
+      return
+    }
+
+    // Get field value from watch
+    const fieldValue = watch('field')
+    if (!fieldValue || fieldValue.trim() === '') {
+      setError('field', {
+        type: 'manual',
+        message: 'Field name is required',
+      })
+      setDynamicZoneStep(1)
+      setSettingsTab('BASIC')
+      return
+    }
+
+    // Validate schema selection
+    if (selectedSchemas.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please select at least one component',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Get all form values from watch
+    const formData: FieldConfigurationFormData = {
+      field: fieldValue,
+      required: watch('required') || false,
+      hidden: watch('hidden') || false,
+      readonly: watch('readonly') || false,
+      private: watch('private') || false,
+      localized: watch('localized') || false,
+      unique: watch('unique') || false,
+      note: watch('note') || '',
+      variant: watch('variant'),
+      minLength: watch('minLength'),
+      maxLength: watch('maxLength'),
+      minLengthEnabled: watch('minLengthEnabled') || false,
+      maxLengthEnabled: watch('maxLengthEnabled') || false,
+      defaultValue: watch('defaultValue'),
+      regexPattern: watch('regexPattern'),
+      allowedTypes: watch('allowedTypes') || [],
+      // Schema-specific fields (not used for dynamic zone but required by type)
+      schemaDisplayName: watch('schemaDisplayName'),
+      schemaIcon: watch('schemaIcon'),
+      schemaId: watch('schemaId'),
+      schemaRepeatable: watch('schemaRepeatable') || false,
+      // Relation-specific fields (not used for dynamic zone but required by type)
+      relationType: watch('relationType'),
+      targetCollection: watch('targetCollection'),
+      targetFieldName: watch('targetFieldName'),
+    }
+    
+    // Call onSubmit with the form data
+    await onSubmit(formData)
+  }
+
   const handleAddAnother = () => {
     handleBackToSelection()
   }
@@ -312,19 +457,19 @@ export function AddFieldModal({
   const defaultElements = formElements.filter((fe) => fe.is_system).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const customElements = formElements.filter((fe) => !fe.is_system).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
   const displayElements = activeTab === 'DEFAULT' ? defaultElements : customElements
-  
+
   // Separate into two sections:
   // Section 1: Regular fields (text, rich text blocks, number, date, media, relation, rich text markdown, boolean, json, email, password, enumeration, UID)
   // Section 2: Schema and Dynamic Zone
   const section1Fields = ['text', 'rich_text_blocks', 'number', 'date', 'media', 'relation', 'markdown', 'boolean', 'json', 'email', 'password', 'enumeration', 'uid']
   const section2Fields = ['schema', 'dynamic_zone']
-  
+
   const section1Elements = displayElements.filter((fe) => section1Fields.includes(fe.key)).sort((a, b) => {
     const aIndex = section1Fields.indexOf(a.key)
     const bIndex = section1Fields.indexOf(b.key)
     return aIndex - bIndex
   })
-  
+
   const section2Elements = displayElements.filter((fe) => section2Fields.includes(fe.key)).sort((a, b) => {
     const aIndex = section2Fields.indexOf(a.key)
     const bIndex = section2Fields.indexOf(b.key)
@@ -355,21 +500,19 @@ export function AddFieldModal({
             <div className="flex items-center gap-4 border-b mb-4">
               <button
                 onClick={() => setActiveTab('DEFAULT')}
-                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'DEFAULT'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'DEFAULT'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 DEFAULT
               </button>
               <button
                 onClick={() => setActiveTab('CUSTOM')}
-                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                  activeTab === 'CUSTOM'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeTab === 'CUSTOM'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 CUSTOM
               </button>
@@ -406,10 +549,10 @@ export function AddFieldModal({
                           }
                           return colorMap[element.category || ''] || '#9333EA'
                         }
-                        
+
                         const iconColor = getIconColor()
                         const IconComponent = getIconComponent(element.icon)
-                        
+
                         return (
                           <button
                             key={element.id}
@@ -419,7 +562,7 @@ export function AddFieldModal({
                             <div className="flex items-start gap-2">
                               <div
                                 className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                                style={{ 
+                                style={{
                                   backgroundColor: `${iconColor}20`,
                                 }}
                               >
@@ -474,10 +617,10 @@ export function AddFieldModal({
                           }
                           return colorMap[element.category || ''] || '#9333EA'
                         }
-                        
+
                         const iconColor = getIconColor()
                         const IconComponent = getIconComponent(element.icon)
-                        
+
                         return (
                           <button
                             key={element.id}
@@ -487,7 +630,7 @@ export function AddFieldModal({
                             <div className="flex items-start gap-2">
                               <div
                                 className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-                                style={{ 
+                                style={{
                                   backgroundColor: `${iconColor}20`,
                                 }}
                               >
@@ -541,7 +684,7 @@ export function AddFieldModal({
                   <>
                     <div
                       className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-                      style={{ 
+                      style={{
                         backgroundColor: `${selectedFormElement.icon_color || '#9333EA'}20`,
                       }}
                     >
@@ -564,7 +707,7 @@ export function AddFieldModal({
                 )}
               </div>
               <DialogTitle>
-                {selectedFormElement?.key === 'schema' 
+                {selectedFormElement?.key === 'schema'
                   ? `Add new schema (${schemaStep}/2)`
                   : `Add new ${selectedFormElement?.name || 'field'} field`
                 }
@@ -578,11 +721,10 @@ export function AddFieldModal({
             <div className="flex items-center gap-4 border-b mb-4">
               <button
                 onClick={() => setSettingsTab('BASIC')}
-                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                  settingsTab === 'BASIC'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${settingsTab === 'BASIC'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 BASIC SETTINGS
               </button>
@@ -593,17 +735,20 @@ export function AddFieldModal({
                   }
                 }}
                 disabled={selectedFormElement?.key === 'schema' && schemaStep === 1}
-                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
-                  settingsTab === 'ADVANCED'
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${settingsTab === 'ADVANCED'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 ADVANCED SETTINGS
               </button>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)}>
+            <form onSubmit={
+              selectedFormElement?.key === 'dynamic_zone' && dynamicZoneStep === 2
+                ? handleDynamicZoneSubmit
+                : handleSubmit(onSubmit)
+            }>
               <div className="space-y-4 py-4">
                 {selectedFormElement && (
                   <FieldFormRenderer
@@ -629,6 +774,12 @@ export function AddFieldModal({
                     onSchemaIconSearchChange={setSchemaIconSearch}
                     availableDataModels={availableDataModels}
                     currentDataModelId={contentTypeId}
+                    // Dynamic Zone props
+                    dynamicZoneStep={dynamicZoneStep}
+                    onDynamicZoneStep1Next={handleDynamicZoneStep1Next}
+                    onDynamicZoneStep2Back={handleDynamicZoneStep2Back}
+                    selectedSchemas={selectedSchemas}
+                    onSelectedSchemasChange={setSelectedSchemas}
                   />
                 )}
               </div>
@@ -638,42 +789,50 @@ export function AddFieldModal({
                   Cancel
                 </Button>
                 {selectedFormElement?.key === 'schema' && schemaStep === 1 ? (
-                  <Button
-                    type="button"
-                    onClick={handleSchemaStep1Next}
-                    disabled={saving}
-                  >
+                  <Button type="button" onClick={handleSchemaStep1Next} disabled={saving}>
                     Configure the schema
+                  </Button>
+                ) : selectedFormElement?.key === 'dynamic_zone' && dynamicZoneStep === 1 ? (
+                  <Button type="button" onClick={handleDynamicZoneStep1Next} disabled={saving}>
+                    <span className="flex items-center">
+                      <span className="mr-2">+</span>
+                      Add components to the zone
+                    </span>
                   </Button>
                 ) : (
                   <>
-                    {selectedFormElement?.key === 'schema' && schemaStep === 2 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleSchemaStep2Back}
-                        disabled={saving}
-                      >
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddAnother}
+                    {((selectedFormElement?.key === 'schema' && schemaStep === 2) ||
+                      (selectedFormElement?.key === 'dynamic_zone' && dynamicZoneStep === 2)) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={selectedFormElement?.key === 'schema' ? handleSchemaStep2Back : handleDynamicZoneStep2Back}
+                          disabled={saving}
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-2" />
+                          Back
+                        </Button>
+                      )}
+                    {!(selectedFormElement?.key === 'schema' && schemaStep === 2) &&
+                      !(selectedFormElement?.key === 'dynamic_zone' && dynamicZoneStep === 2) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleAddAnother}
+                          disabled={saving}
+                        >
+                          + Add another field
+                        </Button>
+                      )}
+                    <Button 
+                      type="submit" 
                       disabled={saving}
                     >
-                      + Add another field
-                    </Button>
-                    <Button type="submit" disabled={saving}>
                       {saving ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Adding...
+                          {selectedFormElement?.key === 'dynamic_zone' ? 'Creating...' : 'Adding...'}
                         </>
-                      ) : selectedFormElement?.key === 'schema' && schemaStep === 2 ? (
-                        'Finish'
                       ) : (
                         'Finish'
                       )}

@@ -25,7 +25,7 @@ export function RelationFieldForm({
   )
 
   const getRelationIcon = () => {
-    switch(relationType) {
+    switch (relationType) {
       case 'oneWay':
         return <ArrowRight className="h-4 w-4" />
       case 'oneToOne':
@@ -58,15 +58,18 @@ export function RelationFieldForm({
             </div>
             <div className="border-t pt-3">
               <Label htmlFor="sourceFieldName" className="text-sm">
-                Field name
+                Field name <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="sourceFieldName"
-                {...register('field')}
+                {...register('field', { required: 'Field name is required' })}
                 placeholder="article"
                 disabled={saving}
                 className="mt-1"
               />
+              {errors.field && (
+                <p className="text-xs text-destructive mt-1">{errors.field.message}</p>
+              )}
             </div>
           </div>
 
@@ -76,7 +79,7 @@ export function RelationFieldForm({
               {formElement.interface?.relationTypes?.map((rt: any) => {
                 const isSelected = relationType === rt.key
                 const getIcon = () => {
-                  switch(rt.key) {
+                  switch (rt.key) {
                     case 'oneWay':
                       return <ArrowRight className="h-4 w-4" />
                     case 'oneToOne':
@@ -101,8 +104,8 @@ export function RelationFieldForm({
                     disabled={saving}
                     className={`
                       p-1.5 border rounded transition-colors
-                      ${isSelected 
-                        ? 'border-primary bg-primary text-white' 
+                      ${isSelected
+                        ? 'border-primary bg-primary text-white'
                         : 'border-gray-200 hover:border-gray-300 bg-white'
                       }
                       disabled:opacity-50 disabled:cursor-not-allowed
@@ -128,7 +131,7 @@ export function RelationFieldForm({
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <select
-                  {...register('targetCollection')}
+                  {...register('targetCollection', { required: 'Target collection is required' })}
                   disabled={saving || loadingContentTypes}
                   className="w-full px-3 py-2 border rounded-md bg-white text-sm appearance-none pr-8"
                 >
@@ -144,6 +147,9 @@ export function RelationFieldForm({
                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
             </div>
+            {errors.targetCollection && (
+              <p className="text-xs text-destructive mt-1">{errors.targetCollection.message}</p>
+            )}
             <div className="border-t pt-3">
               <Label htmlFor="targetFieldName" className="text-sm">
                 Field name
@@ -183,7 +189,7 @@ export function RelationFieldForm({
       <div className="text-sm text-muted-foreground">
         Advanced settings for {formElement.name} field
       </div>
-      
+
       {/* Settings Section */}
       <div className="space-y-4 pt-4 border-t">
         <div className="text-sm font-medium">Settings</div>

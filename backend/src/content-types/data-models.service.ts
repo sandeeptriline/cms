@@ -18,7 +18,7 @@ export class DataModelsService {
   constructor(
     private prisma: PrismaService,
     private tenantPrisma: TenantPrismaService,
-  ) {}
+  ) { }
 
   /**
    * Get all data models for a tenant
@@ -197,7 +197,7 @@ export class DataModelsService {
       let defaultProject = await client.$queryRawUnsafe<Array<{ id: string }>>(
         `SELECT id FROM projects ORDER BY created_at ASC LIMIT 1`
       );
-      
+
       let projectId: string;
       if (defaultProject.length === 0) {
         // Create default project if none exists
@@ -566,8 +566,8 @@ export class DataModelsService {
         field: string;
         type: string;
         interface: string | null;
-        options: string | null;
-        validation: string | null;
+        options: any;
+        validation: any;
         required: number;
         hidden: number;
         readonly: number;
@@ -593,8 +593,8 @@ export class DataModelsService {
         field: field.field,
         type: field.type,
         interface: field.interface || undefined,
-        options: field.options ? JSON.parse(field.options) : undefined,
-        validation: field.validation ? JSON.parse(field.validation) : undefined,
+        options: field.options && typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+        validation: field.validation && typeof field.validation === 'string' ? JSON.parse(field.validation) : field.validation,
         required: field.required === 1,
         hidden: field.hidden === 1,
         readonly: field.readonly === 1,

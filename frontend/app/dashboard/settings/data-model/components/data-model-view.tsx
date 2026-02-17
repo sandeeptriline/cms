@@ -63,6 +63,7 @@ interface SortableFieldItemProps {
   isExpanded?: boolean
   onToggleExpand?: () => void
   nestedFields?: ContentTypeField[]
+  contentTypes?: ContentType[] // For mapping schema IDs to names
 }
 
 function SortableFieldItem({ 
@@ -72,6 +73,7 @@ function SortableFieldItem({
   isExpanded = false,
   onToggleExpand,
   nestedFields = [],
+  contentTypes = [],
 }: SortableFieldItemProps) {
   const {
     attributes,
@@ -88,10 +90,45 @@ function SortableFieldItem({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  const fieldConfig = getFieldTypeConfig(field.type)
+  // Determine field type based on interface or type
+  const fieldInterface = (field.interface || '').toLowerCase()
+  const fieldType = (field.type || '').toLowerCase()
+  
+  // Check if it's a schema field (interface can be 'schema' or 'schema-selector', or type can be 'schema')
+  const isSchema = fieldInterface === 'schema' || 
+                   fieldInterface === 'schema-selector' || 
+                   fieldInterface?.includes('schema') ||
+                   fieldType === 'schema'
+  
+  // Check if it's a dynamic zone field (interface can be 'dynamic-zone' or 'dynamic_zone', or type can be 'dynamiczone' or 'dynamic_zone')
+  const isDynamicZone = fieldInterface === 'dynamic-zone' || 
+                        fieldInterface === 'dynamic_zone' || 
+                        fieldInterface?.includes('dynamic') ||
+                        fieldType === 'dynamiczone' || 
+                        fieldType === 'dynamic_zone'
+  
+  const isComponent = fieldType === 'component'
+  
+  // Get field config - use interface for schema/dynamic zone, otherwise use type
+  const displayType = isSchema ? 'schema' : (isDynamicZone ? 'dynamiczone' : field.type)
+  const fieldConfig = getFieldTypeConfig(displayType)
   const IconComponent = fieldConfig.icon
-  const isComponent = field.type.toLowerCase() === 'component'
   const hasNestedFields = nestedFields && nestedFields.length > 0
+  
+  // Get schema-specific info from options
+  const schemaInfo = isSchema && field.options ? {
+    displayName: field.options.schemaDisplayName || field.options.displayName || '',
+    icon: field.options.schemaIcon || field.options.icon || 'Database',
+    repeatable: field.options.schemaRepeatable || field.options.repeatable || false,
+    schemaId: field.options.schemaId || field.options.id || '',
+  } : null
+  
+  // Get dynamic zone-specific info from options
+  const dynamicZoneInfo = isDynamicZone && field.options ? {
+    allowedSchemas: Array.isArray(field.options.allowed_schemas) 
+      ? field.options.allowed_schemas 
+      : (Array.isArray(field.options.allowedSchemas) ? field.options.allowedSchemas : []),
+  } : null
 
   return (
     <>
@@ -111,11 +148,12 @@ function SortableFieldItem({
           <GripVertical className="h-5 w-5" />
         </div>
 
-        {/* Expand/Collapse Button for Components */}
-        {isComponent && (
+        {/* Expand/Collapse Button for Components, Schema, and Dynamic Zone */}
+        {(isComponent || isSchema || isDynamicZone) ? (
           <button
             onClick={onToggleExpand}
             className="text-gray-400 hover:text-gray-600 p-0.5"
+            disabled={!onToggleExpand}
           >
             {isExpanded ? (
               <ChevronDown className="h-4 w-4" />
@@ -123,8 +161,9 @@ function SortableFieldItem({
               <ChevronRight className="h-4 w-4" />
             )}
           </button>
+        ) : (
+          <div className="w-5" />
         )}
-        {!isComponent && <div className="w-5" />}
 
         {/* Field Type Icon */}
         <div
@@ -144,6 +183,21 @@ function SortableFieldItem({
               {isComponent && hasNestedFields && (
                 <span className="text-muted-foreground font-normal ml-1">
                   ({nestedFields.length} {nestedFields.length === 1 ? 'field' : 'fields'})
+                </span>
+              )}
+              {isSchema && schemaInfo && (
+                <span className="text-muted-foreground font-normal ml-1">
+                  ({(() => {
+                    const dataModel = schemaInfo.schemaId 
+                      ? contentTypes.find(ct => ct.id === schemaInfo.schemaId)
+                      : null
+                    return dataModel ? dataModel.name : (schemaInfo.displayName || '')
+                  })()})
+                </span>
+              )}
+              {isDynamicZone && dynamicZoneInfo && (
+                <span className="text-muted-foreground font-normal ml-1">
+                  ({dynamicZoneInfo.allowedSchemas.length} {dynamicZoneInfo.allowedSchemas.length === 1 ? 'schema' : 'schemas'})
                 </span>
               )}
               {field.required && (
@@ -244,6 +298,56 @@ function SortableFieldItem({
           </div>
         </div>
       )}
+
+      {/* Schema Field Details */}
+      {isSchema && isExpanded && schemaInfo && (
+        <div className="bg-gray-50 border-l-2 border-gray-200 ml-4">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="text-xs font-medium text-muted-foreground mb-2">Schema Configuration</div>
+            <div className="text-sm">
+              {(() => {
+                const dataModel = schemaInfo.schemaId 
+                  ? contentTypes.find(ct => ct.id === schemaInfo.schemaId)
+                  : null
+                const schemaName = dataModel ? dataModel.name : (schemaInfo.displayName || '')
+                const schemaType = schemaInfo.repeatable ? 'repeatable schema' : 'single schema'
+                return schemaName ? `${schemaName} (${schemaType})` : schemaType
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Zone Field Details */}
+      {isDynamicZone && isExpanded && dynamicZoneInfo && (
+        <div className="bg-gray-50 border-l-2 border-gray-200 ml-4">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <div className="text-xs font-medium text-muted-foreground mb-2">
+              Allowed Schemas ({dynamicZoneInfo.allowedSchemas.length})
+            </div>
+            {dynamicZoneInfo.allowedSchemas.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No schemas selected</p>
+            ) : (
+              <div className="space-y-1">
+                {dynamicZoneInfo.allowedSchemas.map((schemaId) => {
+                  const dataModel = contentTypes.find(ct => ct.id === schemaId)
+                  return (
+                    <div
+                      key={schemaId}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded bg-white border border-gray-200"
+                    >
+                      <Database className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-medium">
+                        {dataModel ? dataModel.name : schemaId}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -263,6 +367,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set())
+  const [allContentTypes, setAllContentTypes] = useState<ContentType[]>([]) // For mapping schema IDs
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -274,6 +379,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
   useEffect(() => {
     if (contentTypeId) {
       loadContentType()
+      loadAllContentTypes()
     }
   }, [contentTypeId])
 
@@ -295,6 +401,16 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadAllContentTypes = async () => {
+    try {
+      const data = await contentTypesApi.getAll()
+      setAllContentTypes(data || [])
+    } catch (err: unknown) {
+      // Silently fail - this is just for display purposes
+      console.error('Failed to load content types for mapping:', err)
     }
   }
 
@@ -530,10 +646,20 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
                   // For components, check if there are nested fields (by group or component_id)
                   // For now, we'll check if options contains component fields
                   const nestedFields: ContentTypeField[] = []
-                  if (field.type.toLowerCase() === 'component' && field.options?.fields) {
+                  const fieldType = (field.type || '').toLowerCase()
+                  const fieldInterface = (field.interface || '').toLowerCase()
+                  
+                  if (fieldType === 'component' && field.options?.fields) {
                     // If component has nested fields in options
                     nestedFields.push(...(field.options.fields as ContentTypeField[]))
                   }
+                  
+                  // Check if field is expandable (component, schema, or dynamic zone)
+                  const isExpandable = fieldType === 'component' || 
+                                       fieldInterface === 'schema' || 
+                                       fieldInterface === 'schema-selector' ||
+                                       fieldInterface === 'dynamic-zone' || 
+                                       fieldInterface === 'dynamic_zone'
                   
                   return (
                     <SortableFieldItem
@@ -554,6 +680,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
                         })
                       }}
                       nestedFields={nestedFields}
+                      contentTypes={allContentTypes}
                     />
                   )
                 })}

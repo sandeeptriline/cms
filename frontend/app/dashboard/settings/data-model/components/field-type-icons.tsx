@@ -18,6 +18,7 @@ import {
   KeyRound,
   Blocks,
   Puzzle,
+  Database,
 } from 'lucide-react'
 
 export interface FieldTypeConfig {
@@ -163,8 +164,14 @@ const fieldTypeMap: Record<string, FieldTypeConfig> = {
   // Dynamic zone
   dynamiczone: {
     icon: Blocks,
-    color: '#9C27B0', // Purple
+    color: '#3F51B5', // Indigo
     label: 'Dynamic zone',
+  },
+  // Schema
+  schema: {
+    icon: Database,
+    color: '#6B7280', // Gray
+    label: 'Schema',
   },
 }
 

@@ -28,6 +28,8 @@ export const fieldConfigurationSchema = z.object({
   schemaIcon: z.string().optional(),
   schemaId: z.string().optional(),
   schemaRepeatable: z.boolean().default(false),
+  // Dynamic Zone specific
+  allowedSchemas: z.array(z.string()).optional(),
 })
 
 export type FieldConfigurationFormData = z.infer<typeof fieldConfigurationSchema>
