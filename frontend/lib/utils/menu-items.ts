@@ -30,6 +30,7 @@ import {
   Search,
   BarChart2,
   FileText,
+  FolderKanban,
 } from 'lucide-react'
 import { ROLES } from './roles'
 
@@ -167,10 +168,16 @@ const adminMenuItems: MenuItem[] = [
 /**
  * Settings Submenu Items (shown in secondary sidebar when on Settings pages)
  * Matches Directus Settings menu structure
+ * 
+ * Note: Project-scoped routes (data-model, flows, access-policies, locales) will be
+ * dynamically generated with the current project ID via getSettingsSubmenuItems()
  */
 export const settingsSubmenuItems: SettingsMenuItem[] = [
   // Settings Section
+  { id: 'projects', name: 'Projects', path: '/dashboard/settings/projects', icon: FolderKanban, section: 'settings', requiredRoles: [ROLES.ADMIN] },
+  { id: 'divider_projects', name: '', path: '', icon: Settings, divider: true, section: 'divider' },
   { id: 'data_model', name: 'Data Model', path: '/dashboard/settings/data-model', icon: Database, section: 'settings', requiredRoles: [ROLES.ADMIN] },
+  { id: 'data_model_manager', name: 'Data Model Manager', path: '/dashboard/settings/data-model-manager', icon: FileText, section: 'settings', requiredRoles: [ROLES.ADMIN] },
   { id: 'flows', name: 'Flows', path: '/dashboard/settings/flows', icon: GitBranch, section: 'settings', requiredRoles: [ROLES.ADMIN] },
   { id: 'user_roles', name: 'User Roles', path: '/dashboard/roles', icon: Shield, section: 'settings', requiredRoles: [ROLES.ADMIN] },
   { id: 'access_policies', name: 'Access Policies', path: '/dashboard/settings/access-policies', icon: Lock, section: 'settings', requiredRoles: [ROLES.ADMIN] },
@@ -194,6 +201,60 @@ export const settingsSubmenuItems: SettingsMenuItem[] = [
   // Info Section
   { id: 'version', name: 'CMS Platform 1.0.0', path: '', icon: Info, section: 'info', requiredRoles: [ROLES.ADMIN] },
 ]
+
+/**
+ * Get settings submenu items with project-scoped routes
+ * If projectId is provided, project-scoped routes will use the new structure:
+ * /dashboard/settings/projects/[projectId]/...
+ * Otherwise, project-scoped items link to projects page to select a project first
+ */
+export function getSettingsSubmenuItems(projectId?: string | null): SettingsMenuItem[] {
+  // Return items with project-scoped routes
+  return settingsSubmenuItems.map((item) => {
+    // Update project-scoped routes
+    if (item.id === 'data_model') {
+      return { 
+        ...item, 
+        path: projectId 
+          ? `/dashboard/settings/projects/${projectId}/data-model`
+          : '/dashboard/settings/projects'
+      }
+    }
+    if (item.id === 'data_model_manager') {
+      return { 
+        ...item, 
+        path: projectId 
+          ? `/dashboard/settings/projects/${projectId}/data-model-manager`
+          : '/dashboard/settings/projects'
+      }
+    }
+    if (item.id === 'flows') {
+      return { 
+        ...item, 
+        path: projectId 
+          ? `/dashboard/settings/projects/${projectId}/flows`
+          : '/dashboard/settings/projects'
+      }
+    }
+    if (item.id === 'access_policies') {
+      return { 
+        ...item, 
+        path: projectId 
+          ? `/dashboard/settings/projects/${projectId}/access-policies`
+          : '/dashboard/settings/projects'
+      }
+    }
+    if (item.id === 'translations') {
+      return { 
+        ...item, 
+        path: projectId 
+          ? `/dashboard/settings/projects/${projectId}/locales`
+          : '/dashboard/settings/projects'
+      }
+    }
+    return item
+  })
+}
 
 // Editor: Content creation and editing, no schema/user management
 const editorMenuItems: MenuItem[] = [

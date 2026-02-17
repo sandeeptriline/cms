@@ -6,9 +6,11 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { DataModelsService } from './data-models.service';
@@ -33,15 +35,21 @@ export class ContentTypesController {
   @RequirePermission('content_type:read')
   @ApiOperation({
     summary: 'Get all content types',
-    description: 'Retrieve all content types for the current tenant. Requires content_type:read permission.',
+    description: 'Retrieve all content types for the current tenant and project. Requires content_type:read permission.',
   })
   @ApiResponse({
     status: 200,
     description: 'List of content types',
     type: [ContentTypeResponseDto],
   })
-  async getContentTypes(@TenantId() tenantId: string) {
-    return this.contentTypesService.getContentTypes(tenantId);
+  async getContentTypes(
+    @TenantId() tenantId: string,
+    @Query('projectId') projectId: string,
+  ) {
+    if (!projectId) {
+      throw new BadRequestException('projectId query parameter is required');
+    }
+    return this.contentTypesService.getContentTypes(tenantId, projectId);
   }
 
   @Get(':id')

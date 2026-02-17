@@ -53,6 +53,11 @@ export class CreateFieldDto {
 }
 
 export class CreateContentTypeDto {
+  @ApiProperty({ description: 'Project ID (required)', example: '389a0749-434d-49e6-9b05-7173dd086afe' })
+  @IsString()
+  @IsNotEmpty()
+  projectId: string;
+
   @ApiProperty({ description: 'Content type name', example: 'Blog Post' })
   @IsString()
   @IsNotEmpty()

@@ -6,9 +6,11 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { FormElementsService } from './form-elements.service';
@@ -39,8 +41,14 @@ export class FormElementsController {
     status: 200,
     description: 'List of form elements',
   })
-  async getFormElements(@TenantId() tenantId: string) {
-    return this.formElementsService.getFormElements(tenantId);
+  async getFormElements(
+    @TenantId() tenantId: string,
+    @Query('projectId') projectId: string,
+  ) {
+    if (!projectId) {
+      throw new BadRequestException('projectId query parameter is required');
+    }
+    return this.formElementsService.getFormElements(tenantId, projectId);
   }
 
   @Get(':id')

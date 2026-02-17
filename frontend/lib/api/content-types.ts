@@ -32,6 +32,7 @@ export interface ContentType {
 }
 
 export interface CreateContentTypeDto {
+  projectId: string;
   name: string;
   collection: string;
   icon?: string;
@@ -78,10 +79,13 @@ export interface UpdateFieldDto {
 
 export const contentTypesApi = {
   /**
-   * Get all content types
+   * Get all content types for a project
    */
-  async getAll(): Promise<ContentType[]> {
-    const response = await apiClient.get<ContentType[]>('/content-types');
+  async getAll(projectId: string): Promise<ContentType[]> {
+    if (!projectId) {
+      throw new Error('projectId is required');
+    }
+    const response = await apiClient.get<ContentType[]>(`/content-types?projectId=${projectId}`);
     return response.data;
   },
 

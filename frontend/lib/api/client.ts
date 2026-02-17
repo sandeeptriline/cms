@@ -25,12 +25,17 @@ class ApiClient {
         const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null
         const tenantId = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null
 
+        console.log('[ApiClient] Request interceptor - token:', token ? 'exists' : 'missing', 'tenantId:', tenantId);
+
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`
         }
 
         if (tenantId && config.headers) {
           config.headers['X-Tenant-ID'] = tenantId
+          console.log('[ApiClient] Added X-Tenant-ID header:', tenantId);
+        } else {
+          console.warn('[ApiClient] No tenant_id in localStorage - X-Tenant-ID header not added');
         }
 
         return config

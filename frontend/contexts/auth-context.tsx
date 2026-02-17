@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   isAuthenticated: boolean
+  tenantId: string | null
   login: (email: string, password: string, tenantId?: string) => Promise<void>
   platformAdminLogin: (email: string, password: string) => Promise<void>
   register: (email: string, password: string, name: string, tenantId: string) => Promise<void>
@@ -226,10 +227,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Get tenantId from user or localStorage
+  const tenantId = user?.tenantId || (typeof window !== 'undefined' ? localStorage.getItem(TENANT_ID_KEY) : null)
+
   const value: AuthContextType = {
     user,
     loading,
     isAuthenticated: !!user,
+    tenantId,
     login,
     platformAdminLogin,
     register,

@@ -57,9 +57,11 @@ import {
   superAdminIconItems,
   getTenantUserIconItems,
   settingsSubmenuItems,
+  getSettingsSubmenuItems,
   type MenuItem,
   type SettingsMenuItem,
 } from '@/lib/utils/menu-items'
+import { useProject } from '@/contexts/project-context'
 
 export interface SecondarySidebarItem {
   id: string
@@ -103,6 +105,7 @@ export function Sidebar({
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
+  const { currentProject } = useProject()
 
   // Determine if user is Super Admin
   // Super Admin uses /cp routes, tenant users use /dashboard routes
@@ -489,7 +492,7 @@ export function Sidebar({
               ) : (
                 // Fallback: Show settings submenu if on settings page and no items provided
                 (pathname?.startsWith('/dashboard/settings') || pathname?.startsWith('/cp/settings')) && !isPlatformAdmin ? (
-                  settingsSubmenuItems
+                  getSettingsSubmenuItems(currentProject?.id)
                     .filter(item => {
                       if (!item.requiredRoles || item.requiredRoles.length === 0) return true
                       return item.requiredRoles.some(role => 

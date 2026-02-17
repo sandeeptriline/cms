@@ -8,6 +8,9 @@ import { TenantUsersModule } from './tenant-users/tenant-users.module';
 import { PlatformUsersModule } from './platform-users/platform-users.module';
 import { ContentTypesModule } from './content-types/content-types.module';
 import { FormElementsModule } from './form-elements/form-elements.module';
+import { ProjectsModule } from './projects/projects.module';
+import { FlowsModule } from './flows/flows.module';
+import { ContentEntriesModule } from './content-entries/content-entries.module';
 
 @Module({
   imports: [
@@ -19,6 +22,9 @@ import { FormElementsModule } from './form-elements/form-elements.module';
     PlatformUsersModule,
     ContentTypesModule,
     FormElementsModule,
+    ProjectsModule,
+    FlowsModule,
+    ContentEntriesModule,
   ],
   controllers: [AppController],
   providers: [],

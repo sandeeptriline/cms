@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Breadcrumb } from './breadcrumb'
 
 interface HeaderProps {
   title?: string
@@ -55,13 +56,14 @@ export function Header({
       <div className="flex h-14 items-center justify-between px-6">
         {/* Left: Breadcrumbs and Title */}
         <div className="flex items-center gap-3">
+          <Breadcrumb />
+          <div className="h-6 w-px bg-border" />
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Content</span>
-            <span className="text-xs text-muted-foreground">/</span>
-            <div className="flex items-center gap-2">
-              {pageIcon}
-              <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
-            </div>
+            {pageIcon}
+            <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
+            {subtitle && (
+              <span className="text-sm text-muted-foreground">/ {subtitle}</span>
+            )}
           </div>
         </div>
 

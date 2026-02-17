@@ -3,6 +3,7 @@
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Settings, Database, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
+import { useProject } from '@/contexts/project-context'
 import { isAdmin } from '@/lib/utils/roles'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -25,6 +26,7 @@ import {
 
 export default function SettingsPage() {
   const { user, loading: authLoading } = useAuth()
+  const { currentProject } = useProject()
   const router = useRouter()
   const isAdminUser = isAdmin(user?.roles)
 
@@ -45,14 +47,23 @@ export default function SettingsPage() {
     )
   }
 
+  // Generate project-scoped paths for project-scoped routes
+  const getProjectPath = (route: string) => {
+    if (!currentProject) {
+      // No project selected, link to projects page
+      return '/dashboard/settings/projects'
+    }
+    return `/dashboard/settings/projects/${currentProject.id}${route}`
+  }
+
   const settingsSections = [
     {
       title: 'Settings',
       items: [
-        { name: 'Data Model', path: '/dashboard/settings/data-model', icon: Database, description: 'Manage content schemas and field definitions' },
-        { name: 'Flows', path: '/dashboard/settings/flows', icon: GitBranch, description: 'Configure approval workflows and automation' },
+        { name: 'Data Model', path: getProjectPath('/data-model'), icon: Database, description: 'Manage content schemas and field definitions' },
+        { name: 'Flows', path: getProjectPath('/flows'), icon: GitBranch, description: 'Configure approval workflows and automation' },
         { name: 'User Roles', path: '/dashboard/roles', icon: Shield, description: 'Manage roles and role assignments' },
-        { name: 'Access Policies', path: '/dashboard/settings/access-policies', icon: Lock, description: 'Fine-grained permission management' },
+        { name: 'Access Policies', path: getProjectPath('/access-policies'), icon: Lock, description: 'Fine-grained permission management' },
       ],
     },
     {
@@ -61,7 +72,7 @@ export default function SettingsPage() {
         { name: 'Settings', path: '/dashboard/settings', icon: Settings, description: 'General tenant configuration', isCurrent: true },
         { name: 'Appearance', path: '/dashboard/settings/appearance', icon: Palette, description: 'Theme and branding configuration' },
         { name: 'Bookmarks', path: '/dashboard/settings/bookmarks', icon: Bookmark, description: 'Save frequently accessed views and filters' },
-        { name: 'Translations', path: '/dashboard/settings/translations', icon: Languages, description: 'Multi-language content management' },
+        { name: 'Translations', path: getProjectPath('/locales'), icon: Languages, description: 'Multi-language content management' },
         { name: 'AI', path: '/dashboard/settings/ai', icon: Sparkles, description: 'AI configuration and settings' },
       ],
     },

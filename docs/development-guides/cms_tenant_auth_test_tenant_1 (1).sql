@@ -946,7 +946,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `email`, `password_hash`, `name`, `avatar`, `status`, `email_verified_at`, `verification_token`, `provider`, `external_identifier`, `mfa_enabled`, `mfa_secret`, `preferences`, `language`, `theme`, `last_login_at`, `created_at`, `updated_at`) VALUES
 ('80c1cbcf-ef58-4109-8a9f-9123871c36db', 'apiuser@gmail.com', '$2b$10$yeJWCVXblcoibuTbZi6of.l7GyfslXpzrGyEOuUaWibxybLwOFtwy', 'API User', NULL, '1', NULL, NULL, NULL, NULL, 0, NULL, NULL, 'en', 'auto', '2026-02-13 06:25:03', '2026-02-13 05:43:54', '2026-02-13 06:25:03'),
-('dc166f24-982e-459a-a180-6910f855c3f0', 'test1@gmail.com', '$2b$10$BbAtE/75Gp5WxV4OvGKhSeCGL7kbpoF/XoOv4RJBQXsS0RFjBn.y2', 'test user', NULL, '1', NULL, NULL, NULL, NULL, 0, NULL, NULL, 'en', 'auto', '2026-02-16 11:39:32', '2026-02-12 12:53:17', '2026-02-16 11:39:32');
+('dc166f24-982e-459a-a180-6910f855c3f0', 'test1', '$2b$10$BbAtE/75Gp5WxV4OvGKhSeCGL7kbpoF/XoOv4RJBQXsS0RFjBn.y2', 'test user', NULL, '1', NULL, NULL, NULL, NULL, 0, NULL, NULL, 'en', 'auto', '2026-02-16 11:39:32', '2026-02-12 12:53:17', '2026-02-16 11:39:32');
 
 -- --------------------------------------------------------
 

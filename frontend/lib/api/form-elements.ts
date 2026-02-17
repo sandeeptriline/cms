@@ -73,10 +73,13 @@ export interface UpdateFormElementDto {
 
 export const formElementsApi = {
   /**
-   * Get all form elements
+   * Get all form elements for a project (system + project-specific)
    */
-  async getAll(): Promise<FormElement[]> {
-    const response = await apiClient.get<FormElement[]>('/form-elements');
+  async getAll(projectId: string): Promise<FormElement[]> {
+    if (!projectId) {
+      throw new Error('projectId is required');
+    }
+    const response = await apiClient.get<FormElement[]>(`/form-elements?projectId=${projectId}`);
     return response.data;
   },
 

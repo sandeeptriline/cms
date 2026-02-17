@@ -21,9 +21,13 @@ export class ContentTypesService {
   ) {}
 
   /**
-   * Get all data models for a tenant
+   * Get all data models for a tenant and project
    */
-  async getContentTypes(tenantId: string, projectId?: string) {
+  async getContentTypes(tenantId: string, projectId: string) {
+    if (!projectId) {
+      throw new BadRequestException('projectId is required');
+    }
+
     const tenant = await this.prisma.tenants.findUnique({
       where: { id: tenantId },
     });
@@ -33,16 +37,13 @@ export class ContentTypesService {
     }
 
     return this.tenantPrisma.withTenant(tenant.db_name, async (client) => {
-      // Get default project if not specified
-      let projectIdToUse = projectId;
-      if (!projectIdToUse) {
-        const defaultProject = await client.$queryRawUnsafe<Array<{ id: string }>>(
-          `SELECT id FROM projects ORDER BY created_at ASC LIMIT 1`
-        );
-        if (defaultProject.length === 0) {
-          return [];
-        }
-        projectIdToUse = defaultProject[0].id;
+      // Verify project exists
+      const project = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM projects WHERE id = ?`,
+        projectId
+      );
+      if (project.length === 0) {
+        throw new NotFoundException(`Project with ID ${projectId} not found`);
       }
 
       // Get data models with fields
@@ -65,7 +66,7 @@ export class ContentTypesService {
         FROM content_types 
         WHERE project_id = ?
         ORDER BY name ASC`,
-        projectIdToUse
+        projectId
       );
 
       // Get fields for each content type
@@ -184,6 +185,11 @@ export class ContentTypesService {
    * Create a new data model
    */
   async createContentType(tenantId: string, createDto: CreateContentTypeDto) {
+    // Validate projectId is provided
+    if (!createDto.projectId) {
+      throw new BadRequestException('projectId is required');
+    }
+
     const tenant = await this.prisma.tenants.findUnique({
       where: { id: tenantId },
     });
@@ -193,26 +199,16 @@ export class ContentTypesService {
     }
 
     return this.tenantPrisma.withTenant(tenant.db_name, async (client) => {
-      // Get default project, or create one if none exists
-      let defaultProject = await client.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT id FROM projects ORDER BY created_at ASC LIMIT 1`
+      // Verify project exists
+      const project = await client.$queryRawUnsafe<Array<{ id: string }>>(
+        `SELECT id FROM projects WHERE id = ?`,
+        createDto.projectId
       );
-      
-      let projectId: string;
-      if (defaultProject.length === 0) {
-        // Create default project if none exists
-        projectId = uuidv4();
-        await client.$executeRawUnsafe(
-          `INSERT INTO projects (id, name, slug, config, feature_flags, created_at, updated_at)
-           VALUES (?, ?, ?, '{}', '{}', NOW(), NOW())`,
-          projectId,
-          'Default Project',
-          'default'
-        );
-        this.logger.log(`Default project created for tenant ${tenantId}`);
-      } else {
-        projectId = defaultProject[0].id;
+      if (project.length === 0) {
+        throw new NotFoundException(`Project with ID ${createDto.projectId} not found`);
       }
+
+      const projectId = createDto.projectId;
 
       // Check if collection already exists
       const existing = await client.$queryRawUnsafe<Array<{ id: string }>>(
