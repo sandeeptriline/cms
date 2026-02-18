@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,7 @@ export default function CreateEntryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     if (currentProject && projectId === currentProject.id && !projectLoading && contentTypeId) {
@@ -156,7 +157,8 @@ export default function CreateEntryPage() {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-[#eceff5] bg-white p-6 shadow-sm">
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="rounded-3xl border border-[#eceff5] bg-white p-6 shadow-sm">
                     <DynamicFormBuilder
                       fields={contentType.fields || []}
                       defaultValues={{}}
@@ -164,7 +166,28 @@ export default function CreateEntryPage() {
                       onSubmit={handleEntryFormSubmit}
                       submitLabel={saving ? 'Saving…' : 'Save entry'}
                       disabled={saving}
+                      formRef={formRef}
+                      showSubmitButton={false}
                     />
+                  </div>
+                  <aside className="rounded-3xl border border-[#eceff5] bg-white p-6 shadow-sm">
+                    <div className="space-y-4">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Entry
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => formRef.current?.requestSubmit()}
+                        disabled={saving}
+                        className="w-full"
+                      >
+                        {saving ? 'Saving…' : 'Save entry'}
+                      </Button>
+                      <Button type="button" variant="outline" disabled={saving} className="w-full">
+                        Publish
+                      </Button>
+                    </div>
+                  </aside>
                 </div>
               </section>
             ) : (

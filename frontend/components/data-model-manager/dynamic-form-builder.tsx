@@ -1,11 +1,15 @@
 'use client'
 
 import { useForm } from 'react-hook-form'
-import type { ReactElement } from 'react'
+import type { ReactElement, RefObject } from 'react'
 import { Button } from '@/components/ui/button'
 import { ContentTypeField } from '@/lib/api/content-types'
 import { BooleanField } from '@/components/data-model-manager/fields/boolean-field'
 import { DynamicZoneField } from '@/components/data-model-manager/fields/dynamic-zone-field'
+import { EnumerationField } from '@/components/data-model-manager/fields/enumeration-field'
+import { JsonField } from '@/components/data-model-manager/fields/json-field'
+import { MediaField } from '@/components/data-model-manager/fields/media-field'
+import { RelationField } from '@/components/data-model-manager/fields/relation-field'
 import { SchemaField } from '@/components/data-model-manager/fields/schema-field'
 import { TextareaField } from '@/components/data-model-manager/fields/textarea-field'
 import { TextField } from '@/components/data-model-manager/fields/text-field'
@@ -18,6 +22,8 @@ interface DynamicFormBuilderProps {
   disabled?: boolean
   columns?: number
   onSubmit: (values: Record<string, any>) => Promise<void> | void
+  formRef?: RefObject<HTMLFormElement>
+  showSubmitButton?: boolean
 }
 
 type EntryValues = Record<string, any>
@@ -30,6 +36,7 @@ interface FieldRendererProps {
   placeholder?: string
   registerOptions?: RegisterOptions
   inputType?: string
+  defaultValue?: unknown
 }
 
 type FieldRenderer = (props: FieldRendererProps) => ReactElement
@@ -93,6 +100,8 @@ export function DynamicFormBuilder({
   disabled = false,
   columns = 1,
   onSubmit,
+  formRef,
+  showSubmitButton = true,
 }: DynamicFormBuilderProps) {
   const form = useForm<EntryValues>({
     defaultValues,
@@ -108,11 +117,21 @@ export function DynamicFormBuilder({
     text: TextField,
     input: TextField,
     textarea: TextareaField,
+    json: JsonField,
+    rich_text: TextareaField,
+    rich_text_markdown: TextareaField,
     boolean: BooleanField,
     schema: SchemaField,
     'single-schema': SchemaField,
     'repeatable-schema': SchemaField,
     'dynamic-zone': DynamicZoneField,
+    relation: RelationField,
+    media: MediaField,
+    enumeration: EnumerationField,
+    markdown: TextareaField,
+    blocks: TextareaField,
+    uid: TextField,
+    date: TextField,
   }
 
   const getInputType = (field: ContentTypeField): string => {
@@ -138,12 +157,43 @@ export function DynamicFormBuilder({
   }
 
   const renderField = (field: ContentTypeField) => {
-    const typeKey = (field.interface || field.type || 'text').toLowerCase()
+    const normalizedType = (() => {
+      const fieldType = field.type?.toLowerCase()
+      if (fieldType === 'json') return 'json'
+      if (fieldType === 'rich_text' || fieldType === 'rich_text_blocks') return 'rich_text'
+      if (fieldType === 'rich_text_markdown') return 'rich_text_markdown'
+      if (fieldType === 'markdown') return 'markdown'
+      if (fieldType === 'blocks') return 'blocks'
+      if (fieldType === 'relation') return 'relation'
+      if (fieldType === 'enumeration') return 'enumeration'
+      if (fieldType === 'uid') return 'uid'
+      if (fieldType === 'date') return 'date'
+      if (fieldType === 'datetime') return 'date'
+      if (fieldType === 'time') return 'date'
+      if (['media', 'file', 'upload'].includes(fieldType || '')) return 'media'
+
+      const interfaceKey = field.interface?.toLowerCase()
+      if (interfaceKey) {
+        if (interfaceKey.includes('enumeration')) return 'enumeration'
+        if (interfaceKey.includes('markdown')) return 'markdown'
+        if (interfaceKey.includes('blocks')) return 'blocks'
+        if (interfaceKey.includes('uid')) return 'uid'
+        if (['media', 'file', 'files', 'upload', 'asset'].some((keyword) => interfaceKey.includes(keyword))) {
+          return 'media'
+        }
+        return interfaceKey
+      }
+
+      if (fieldType) return fieldType
+      return 'text'
+    })()
+    const typeKey = normalizedType
     const Renderer = renderers[typeKey] || TextField
     const placeholder =
       field.validation?.placeholder || field.note || field.options?.placeholder || ''
     const rules = buildValidationRules(field)
     const fieldError = errors[field.field] as FieldError | undefined
+    const fieldDefaultValue = defaultValues[field.field]
 
     const htmlType = getInputType(field)
 
@@ -157,6 +207,7 @@ export function DynamicFormBuilder({
           placeholder={placeholder}
           registerOptions={rules}
           inputType={htmlType}
+          defaultValue={fieldDefaultValue}
         />
       </div>
     )
@@ -164,6 +215,7 @@ export function DynamicFormBuilder({
 
   return (
     <form
+      ref={formRef}
       onSubmit={handleSubmit((values) => onSubmit(values))}
       className="space-y-6"
     >
@@ -177,11 +229,13 @@ export function DynamicFormBuilder({
       >
         {fields.map((field) => renderField(field))}
       </div>
-      <div className="flex justify-end">
-        <Button type="submit" disabled={disabled || isSubmitting}>
-          {submitLabel}
-        </Button>
-      </div>
+      {showSubmitButton && (
+        <div className="flex justify-end">
+          <Button type="submit" disabled={disabled || isSubmitting}>
+            {submitLabel}
+          </Button>
+        </div>
+      )}
     </form>
   )
 }
