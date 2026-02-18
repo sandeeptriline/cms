@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- Node.js 20.x LTS or higher
+- Node.js 20.x LTS or higher (high)
 - npm or yarn
 - Backend API running (see [Backend Setup](../../backend/docs/SETUP_GUIDE.md))
 
