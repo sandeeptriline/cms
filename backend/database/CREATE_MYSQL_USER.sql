@@ -7,7 +7,7 @@
 -- Tenant database privileges will be granted when databases are created dynamically
 
 -- Step 1: Create the user
-CREATE USER 'cms_user'@'localhost' IDENTIFIED BY 'Sandeep@123!';
+CREATE USER 'cms_user'@'localhost' IDENTIFIED BY 'Triline@123!';
 
 -- Step 2: Grant privileges to platform database
 GRANT ALL PRIVILEGES ON cms_platform.* TO 'cms_user'@'localhost';

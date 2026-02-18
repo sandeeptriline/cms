@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useAuth } from '@/contexts/auth-context'
+import { useProject } from '@/contexts/project-context'
 import { isSuperAdmin } from '@/lib/utils/roles'
-import { contentApi, ContentType } from '@/lib/api/content'
+import { contentTypesApi, ContentType } from '@/lib/api/content-types'
 import {
   Table,
   TableBody,
@@ -37,27 +38,29 @@ export default function DashboardPage() {
     }
   }, [authLoading, isPlatformAdmin, router])
 
+  const { currentProject, loading: projectLoading } = useProject()
+
   useEffect(() => {
-    if (!isPlatformAdmin) {
+    if (!isPlatformAdmin && currentProject) {
       loadContentTypes()
-    } else {
+    } else if (!isPlatformAdmin && !projectLoading && !currentProject) {
+      setLoading(false)
+      setContentTypes([])
+    } else if (isPlatformAdmin) {
       setLoading(false)
     }
-  }, [isPlatformAdmin])
+  }, [isPlatformAdmin, currentProject, projectLoading])
 
   const loadContentTypes = async () => {
+    if (!currentProject) return
     try {
       setLoading(true)
       setError(null)
-      // TODO: Backend endpoint GET /api/v1/content-types needs to be implemented
-      // For now, this will fail gracefully and show an empty state
-      const response = await contentApi.getAll()
-      setContentTypes(response.data || [])
+      const data = await contentTypesApi.getAll(currentProject.id)
+      setContentTypes(Array.isArray(data) ? data : [])
     } catch (err: any) {
-      // API endpoint not implemented yet - show empty state
       if (err.response?.status === 404) {
         setContentTypes([])
-        setError('Content types API endpoint not implemented yet. Please implement GET /api/v1/content-types in the backend.')
       } else {
         setError(err.message || 'Failed to load content types')
       }
@@ -108,10 +111,17 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {loading ? (
+          {(loading || (projectLoading && !currentProject)) ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               <span className="ml-2 text-muted-foreground">Loading content types...</span>
+            </div>
+          ) : !currentProject && !projectLoading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-muted-foreground mb-2">No project selected</p>
+              <p className="text-sm text-muted-foreground">
+                Create or select a project in Settings to manage content types
+              </p>
             </div>
           ) : contentTypes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -179,7 +189,7 @@ export default function DashboardPage() {
                         </TableCell>
                         <TableCell className="h-12 px-4">
                           <span className="text-muted-foreground text-sm">
-                            {item.fields ?? 0} {item.fields === 1 ? 'Field' : 'Fields'}
+                            {Array.isArray(item.fields) ? item.fields.length : 0} {Array.isArray(item.fields) && item.fields.length === 1 ? 'Field' : 'Fields'}
                           </span>
                         </TableCell>
                         <TableCell className="h-12 px-4">
