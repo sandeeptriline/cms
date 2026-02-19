@@ -46,30 +46,34 @@ export function RelationFieldForm({
   if (settingsTab === 'BASIC') {
     return (
       <div className="space-y-4">
-        {/* Two Entity Cards with Relation Type Selector */}
+        {/* Row 1: Field name (col 1) | blank (col 2) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="border rounded-lg p-4 space-y-2">
+            <Label htmlFor="sourceFieldName" className="text-sm">
+              Field name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="sourceFieldName"
+              {...register('field', { required: 'Field name is required' })}
+              placeholder="article"
+              disabled={saving}
+            />
+            {errors.field && (
+              <p className="text-xs text-destructive">{errors.field.message}</p>
+            )}
+          </div>
+          <div />
+        </div>
+
+        {/* Row 2+: Two Entity Cards with Relation Type Selector */}
         <div className="flex items-center gap-4">
-          {/* Source Entity Card */}
+          {/* Source Entity Card (display only) */}
           <div className="flex-1 border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
                 <Link2 className="h-4 w-4 text-primary" />
               </div>
               <span className="font-medium">{contentTypeName}</span>
-            </div>
-            <div className="border-t pt-3">
-              <Label htmlFor="sourceFieldName" className="text-sm">
-                Field name <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="sourceFieldName"
-                {...register('field', { required: 'Field name is required' })}
-                placeholder="article"
-                disabled={saving}
-                className="mt-1"
-              />
-              {errors.field && (
-                <p className="text-xs text-destructive mt-1">{errors.field.message}</p>
-              )}
             </div>
           </div>
 

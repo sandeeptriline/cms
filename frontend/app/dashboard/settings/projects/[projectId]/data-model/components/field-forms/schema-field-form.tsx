@@ -36,27 +36,29 @@ export function SchemaFieldForm({
   const schemaRepeatable = watch('schemaRepeatable')
   const schemaId = watch('schemaId')
 
-  // Step 1/2: Basic Information (Display Name + Icon)
+  // Step 1/2: Basic Information — Row 1: Display name (col 1) | blank (col 2)
   if (schemaStep === 1) {
     return (
-      <>
-        {/* Display Name */}
-        <div className="space-y-2">
-          <Label htmlFor="schemaDisplayName">
-            Display name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="schemaDisplayName"
-            placeholder=""
-            {...register('schemaDisplayName', { required: 'Display name is required' })}
-            disabled={saving}
-          />
-          {errors.schemaDisplayName && (
-            <p className="text-sm text-destructive">{errors.schemaDisplayName.message}</p>
-          )}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="schemaDisplayName">
+              Display name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="schemaDisplayName"
+              placeholder=""
+              {...register('schemaDisplayName', { required: 'Display name is required' })}
+              disabled={saving}
+            />
+            {errors.schemaDisplayName && (
+              <p className="text-sm text-destructive">{errors.schemaDisplayName.message}</p>
+            )}
+          </div>
+          <div />
         </div>
 
-        {/* Icon Picker */}
+        {/* Row 2+: Icon Picker */}
         <div className="space-y-2">
           <Label>Icon</Label>
           <div className="space-y-2">
@@ -122,34 +124,36 @@ export function SchemaFieldForm({
             </div>
           </div>
         </div>
-      </>
+      </div>
     )
   }
 
-  // Step 2/2: Configuration (Name + Type + Data Model Select)
+  // Step 2/2: Configuration — Row 1: Name (col 1) | blank (col 2)
   return (
     <>
-      {/* Name */}
-      <div className="space-y-2">
-        <Label htmlFor="field">
-          Name <span className="text-destructive">*</span>
-        </Label>
-        <Input
-          id="field"
-          placeholder=""
-          {...register('field')}
-          disabled={saving}
-          className="border-primary"
-        />
-        {errors.field && (
-          <p className="text-sm text-destructive">{errors.field.message}</p>
-        )}
-        <p className="text-xs text-muted-foreground">
-          No space is allowed for the name of the attribute
-        </p>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="field">
+            Name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="field"
+            placeholder=""
+            {...register('field')}
+            disabled={saving}
+            className="border-primary"
+          />
+          {errors.field && (
+            <p className="text-sm text-destructive">{errors.field.message}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            No space is allowed for the name of the attribute
+          </p>
+        </div>
+        <div />
       </div>
 
-      {/* Type Selection - Repeatable vs Single */}
+      {/* Row 2+: Type Selection - Repeatable vs Single */}
       <div className="space-y-2">
         <Label>Type</Label>
         <div className="grid grid-cols-2 gap-3">

@@ -19,26 +19,29 @@ export function TextFieldForm({ formElement, form, saving, settingsTab }: BaseFi
   if (settingsTab === 'BASIC') {
     return (
       <>
-        {/* Name Field */}
-        <div className="space-y-2">
-          <Label htmlFor="field">
-            Name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="field"
-            placeholder=""
-            {...register('field')}
-            disabled={saving}
-          />
-          {errors.field && (
-            <p className="text-sm text-destructive">{errors.field.message}</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            No space is allowed for the name of the attribute
-          </p>
+        {/* Row 1: Name (col 1) | blank (col 2) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="field">
+              Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="field"
+              placeholder=""
+              {...register('field')}
+              disabled={saving}
+            />
+            {errors.field && (
+              <p className="text-sm text-destructive">{errors.field.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              No space is allowed for the name of the attribute
+            </p>
+          </div>
+          <div />
         </div>
 
-        {/* Variant Selection - 2 Column Grid Layout */}
+        {/* Row 2+: Variant Selection - 2 Column Grid Layout */}
         {formElement.variants && formElement.variants.length > 0 && (
           <div className="space-y-2">
             <Label>Type</Label>

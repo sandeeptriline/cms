@@ -144,11 +144,10 @@ export function DynamicZoneForm({
         )
     }
 
-    // Step 1: Basic Settings
+    // Step 1: Basic Settings — Row 1: Name (col 1) | blank (col 2)
     if (settingsTab === 'BASIC') {
         return (
-            <div className="space-y-4">
-                {/* Name */}
+            <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="field">
                         Name <span className="text-destructive">*</span>
@@ -166,6 +165,7 @@ export function DynamicZoneForm({
                         No space is allowed for the name of the attribute
                     </p>
                 </div>
+                <div />
             </div>
         )
     }

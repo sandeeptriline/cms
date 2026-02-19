@@ -8,33 +8,34 @@ import { BaseFieldFormProps } from './types'
 export function DefaultFieldForm({ formElement, form, saving, settingsTab }: BaseFieldFormProps) {
   const { register, watch, setValue, formState: { errors } } = form
   const required = watch('required')
-  const hidden = watch('hidden')
-  const readonly = watch('readonly')
   const selectedVariant = watch('variant')
 
   if (settingsTab === 'BASIC') {
     return (
       <>
-        {/* Name Field */}
-        <div className="space-y-2">
-          <Label htmlFor="field">
-            Name <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="field"
-            placeholder=""
-            {...register('field')}
-            disabled={saving}
-          />
-          {errors.field && (
-            <p className="text-sm text-destructive">{errors.field.message}</p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            No space is allowed for the name of the attribute
-          </p>
+        {/* Row 1: Name (col 1) | blank (col 2) */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="field">
+              Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="field"
+              placeholder=""
+              {...register('field')}
+              disabled={saving}
+            />
+            {errors.field && (
+              <p className="text-sm text-destructive">{errors.field.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              No space is allowed for the name of the attribute
+            </p>
+          </div>
+          <div />
         </div>
 
-        {/* Variant Selection - 2 Column Grid Layout */}
+        {/* Row 2+: Variant Selection - 2 Column Grid Layout */}
         {formElement.variants && formElement.variants.length > 0 && (
           <div className="space-y-2">
             <Label>Type</Label>
@@ -78,42 +79,6 @@ export function DefaultFieldForm({ formElement, form, saving, settingsTab }: Bas
           </div>
         )}
 
-        {/* Field Options */}
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="required"
-              checked={required}
-              onCheckedChange={(checked) => setValue('required', checked === true)}
-              disabled={saving}
-            />
-            <Label htmlFor="required" className="font-normal cursor-pointer">
-              Required field
-            </Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="hidden"
-              checked={hidden}
-              onCheckedChange={(checked) => setValue('hidden', checked === true)}
-              disabled={saving}
-            />
-            <Label htmlFor="hidden" className="font-normal cursor-pointer">
-              Hidden field
-            </Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="readonly"
-              checked={readonly}
-              onCheckedChange={(checked) => setValue('readonly', checked === true)}
-              disabled={saving}
-            />
-            <Label htmlFor="readonly" className="font-normal cursor-pointer">
-              Read-only field
-            </Label>
-          </div>
-        </div>
       </>
     )
   }
