@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ProtectedRoute } from '@/components/auth/protected-route'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { useAuth } from '@/contexts/auth-context'
+import { useProject } from '@/contexts/project-context'
 import { isSuperAdmin } from '@/lib/utils/roles'
 import { contentApi, ContentType } from '@/lib/api/content'
 import {
@@ -22,8 +23,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, tenantSlug, tenantId } = useAuth()
   const isPlatformAdmin = isSuperAdmin(user?.roles)
+  const { currentProject, loading: projectLoading } = useProject()
   const [contentTypes, setContentTypes] = useState<ContentType[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +39,14 @@ export default function DashboardPage() {
     }
   }, [authLoading, isPlatformAdmin, router])
 
+  // Tenant users without a project selected should land on project list
+  useEffect(() => {
+    if (!authLoading && !isPlatformAdmin && !projectLoading && !currentProject) {
+      router.replace(tenantSlug ? `/${tenantSlug}/projects` : (tenantId ? `/dashboard/projects` : '/login'))
+      return
+    }
+  }, [authLoading, isPlatformAdmin, projectLoading, currentProject, tenantSlug, router])
+
   useEffect(() => {
     if (!isPlatformAdmin) {
       loadContentTypes()
@@ -49,7 +59,7 @@ export default function DashboardPage() {
     try {
       setLoading(true)
       setError(null)
-      // TODO: Backend endpoint GET /api/v1/content-types needs to be implemented
+      // TODO: Backend endpoint GET /api/content-types needs to be implemented
       // For now, this will fail gracefully and show an empty state
       const response = await contentApi.getAll()
       setContentTypes(response.data || [])
@@ -57,7 +67,7 @@ export default function DashboardPage() {
       // API endpoint not implemented yet - show empty state
       if (err.response?.status === 404) {
         setContentTypes([])
-        setError('Content types API endpoint not implemented yet. Please implement GET /api/v1/content-types in the backend.')
+        setError('Content types API endpoint not implemented yet. Please implement GET /api/content-types in the backend.')
       } else {
         setError(err.message || 'Failed to load content types')
       }

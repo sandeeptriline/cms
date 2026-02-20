@@ -399,10 +399,22 @@ export class TenantUsersService {
             updated_at: Date;
           }>>(query, ...params);
         } catch (queryError: any) {
+          const isTableMissing =
+            queryError.code === 'P2010' ||
+            (queryError.message && (
+              queryError.message.includes("doesn't exist") ||
+              queryError.message.includes('Table') && queryError.message.includes('exist')
+            ));
+          if (isTableMissing) {
+            this.logger.warn(
+              `Tenant database ${tenant.db_name} has no users table or wrong schema. ` +
+              `Returning empty list. Use "Reset DB structure" in Control Panel → Tenant → Configuration to apply the v2 schema.`,
+            );
+            return [];
+          }
           this.logger.error(`Query execution error for tenant ${tenant.db_name}: ${queryError.message}`);
           this.logger.error(`Query: ${query}`);
           this.logger.error(`Params: ${JSON.stringify(params)}`);
-          this.logger.error(`Error stack: ${queryError.stack}`);
           throw queryError;
         }
 
@@ -627,19 +639,22 @@ export class TenantUsersService {
           throw new BadRequestException('One or more role IDs are invalid');
         }
 
-        // Insert user roles
-        // Check if updated_at and updated_by columns exist
-        const hasUpdatedColumns = await client.$queryRawUnsafe<Array<{ count: bigint }>>(
+        // Insert user roles (v2 schema has only id, user_id, role_id; legacy may have created_at or updated_at/updated_by)
+        const hasCreatedAt = (await client.$queryRawUnsafe<Array<{ count: bigint }>>(
           `SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
-           WHERE TABLE_SCHEMA = DATABASE() 
-           AND TABLE_NAME = 'user_roles' 
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_roles' AND COLUMN_NAME = 'created_at'`
+        )) as Array<{ count: bigint }>;
+        const hasUpdatedColumns = (await client.$queryRawUnsafe<Array<{ count: bigint }>>(
+          `SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_roles' 
            AND COLUMN_NAME IN ('updated_at', 'updated_by')`
-        );
-        const hasColumns = Number(hasUpdatedColumns[0]?.count || 0) === 2;
+        )) as Array<{ count: bigint }>;
+        const useCreatedAt = Number(hasCreatedAt[0]?.count || 0) === 1;
+        const useUpdatedColumns = Number(hasUpdatedColumns[0]?.count || 0) === 2;
 
         for (const roleId of createDto.roleIds) {
           const userRoleId = uuidv4();
-          if (hasColumns) {
+          if (useUpdatedColumns && useCreatedAt) {
             await client.$executeRawUnsafe(
               `INSERT INTO user_roles (id, user_id, role_id, created_at, updated_at, updated_by) 
                VALUES (?, ?, ?, NOW(), NOW(), ?)`,
@@ -648,10 +663,17 @@ export class TenantUsersService {
               roleId,
               createdBy || null,
             );
-          } else {
+          } else if (useCreatedAt) {
             await client.$executeRawUnsafe(
               `INSERT INTO user_roles (id, user_id, role_id, created_at) 
                VALUES (?, ?, ?, NOW())`,
+              userRoleId,
+              userId,
+              roleId,
+            );
+          } else {
+            await client.$executeRawUnsafe(
+              `INSERT INTO user_roles (id, user_id, role_id) VALUES (?, ?, ?)`,
               userRoleId,
               userId,
               roleId,
@@ -764,19 +786,22 @@ export class TenantUsersService {
             throw new BadRequestException('One or more role IDs are invalid');
           }
 
-          // Check if updated_at and updated_by columns exist
-          const hasUpdatedColumns = await client.$queryRawUnsafe<Array<{ count: bigint }>>(
+          // v2 user_roles has only id, user_id, role_id; legacy may have created_at or updated_at/updated_by
+          const hasCreatedAt = (await client.$queryRawUnsafe<Array<{ count: bigint }>>(
             `SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
-             WHERE TABLE_SCHEMA = DATABASE() 
-             AND TABLE_NAME = 'user_roles' 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_roles' AND COLUMN_NAME = 'created_at'`
+          )) as Array<{ count: bigint }>;
+          const hasUpdatedColumns = (await client.$queryRawUnsafe<Array<{ count: bigint }>>(
+            `SELECT COUNT(*) as count FROM INFORMATION_SCHEMA.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_roles' 
              AND COLUMN_NAME IN ('updated_at', 'updated_by')`
-          );
-          const hasColumns = Number(hasUpdatedColumns[0]?.count || 0) === 2;
+          )) as Array<{ count: bigint }>;
+          const useCreatedAt = Number(hasCreatedAt[0]?.count || 0) === 1;
+          const useUpdatedColumns = Number(hasUpdatedColumns[0]?.count || 0) === 2;
 
-          // Insert new user roles
           for (const roleId of updateDto.roleIds) {
             const userRoleId = uuidv4();
-            if (hasColumns) {
+            if (useUpdatedColumns && useCreatedAt) {
               await client.$executeRawUnsafe(
                 `INSERT INTO user_roles (id, user_id, role_id, created_at, updated_at, updated_by) 
                  VALUES (?, ?, ?, NOW(), NOW(), ?)`,
@@ -785,10 +810,17 @@ export class TenantUsersService {
                 roleId,
                 updatedBy || null,
               );
-            } else {
+            } else if (useCreatedAt) {
               await client.$executeRawUnsafe(
                 `INSERT INTO user_roles (id, user_id, role_id, created_at) 
                  VALUES (?, ?, ?, NOW())`,
+                userRoleId,
+                userId,
+                roleId,
+              );
+            } else {
+              await client.$executeRawUnsafe(
+                `INSERT INTO user_roles (id, user_id, role_id) VALUES (?, ?, ?)`,
                 userRoleId,
                 userId,
                 roleId,

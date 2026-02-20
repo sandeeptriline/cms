@@ -1,15 +1,18 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
-import { Search, Filter, Plus, Grid, MoreVertical, Archive, RefreshCw, Download, FileText, Star, HelpCircle, User } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { Search, Filter, Plus, Grid, MoreVertical, Archive, RefreshCw, Download, FileText, FolderKanban, User, Settings, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Breadcrumb } from './breadcrumb'
+import { useAuth } from '@/contexts/auth-context'
 
 interface HeaderProps {
   title?: string
@@ -19,6 +22,8 @@ interface HeaderProps {
   icon?: React.ReactNode
   onToggleRightSidebar?: () => void
   rightSidebarOpen?: boolean
+  /** Show tenant top nav: Projects, User, Settings */
+  showTenantTopNav?: boolean
 }
 
 export function Header({ 
@@ -28,9 +33,12 @@ export function Header({
   itemCount, 
   icon,
   onToggleRightSidebar,
-  rightSidebarOpen = false
+  rightSidebarOpen = false,
+  showTenantTopNav = false,
 }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout, tenantSlug } = useAuth()
   
   // Extract page title from pathname
   const getPageTitle = () => {
@@ -54,21 +62,32 @@ export function Header({
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background">
       <div className="flex h-14 items-center justify-between px-6">
-        {/* Left: Breadcrumbs and Title */}
-        <div className="flex items-center gap-3">
-          <Breadcrumb />
-          <div className="h-6 w-px bg-border" />
-          <div className="flex items-center gap-2">
-            {pageIcon}
-            <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
-            {subtitle && (
-              <span className="text-sm text-muted-foreground">/ {subtitle}</span>
-            )}
-          </div>
+        {/* Left: Title */}
+        <div className="flex items-center gap-2">
+          {pageIcon}
+          <h1 className="text-lg font-semibold text-foreground">{pageTitle}</h1>
+          {subtitle && (
+            <span className="text-sm text-muted-foreground">/ {subtitle}</span>
+          )}
         </div>
 
-        {/* Right: Actions */}
-        {showActions && (
+        {/* Right: Tenant top menu (Projects, Settings) or actions */}
+        {showTenantTopNav ? (
+          <nav className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={tenantSlug ? `/${tenantSlug}/projects` : '#'} className="flex items-center gap-2">
+                <FolderKanban className="h-4 w-4" />
+                Projects
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/dashboard/settings" className="flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Settings
+              </Link>
+            </Button>
+          </nav>
+        ) : showActions ? (
           <div className="flex items-center gap-2">
             {itemCount !== undefined && (
               <span className="text-sm text-muted-foreground mr-1">
@@ -119,21 +138,8 @@ export function Header({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            {/* User actions */}
-            <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
-                <Star className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted">
-                <User className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
-        )}
+        ) : null}
       </div>
     </header>
   )

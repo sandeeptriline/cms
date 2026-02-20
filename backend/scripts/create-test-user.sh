@@ -3,7 +3,7 @@
 # Script to create a test user for login
 # This registers a user in the tenant database
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <tenant-id> [email] [password] [name]"

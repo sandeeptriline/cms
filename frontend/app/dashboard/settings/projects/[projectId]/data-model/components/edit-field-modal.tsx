@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import { getIconComponent } from '@/lib/utils/icon-library'
 import { contentTypesApi, ContentTypeField, UpdateFieldDto } from '@/lib/api/content-types'
+import { collectionsApi, UpdateCollectionFieldDto } from '@/lib/api/collections'
 import { formElementsApi, FormElement } from '@/lib/api/form-elements'
+import { componentsApi, Component, ComponentField, UpdateComponentFieldDto } from '@/lib/api/components'
 import { useToast } from '@/lib/hooks/use-toast'
 import { useProject } from '@/contexts/project-context'
 import { FieldFormRenderer } from './field-forms'
@@ -27,20 +29,33 @@ import { fieldConfigurationSchema, FieldConfigurationFormData } from './field-fo
 interface EditFieldModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  contentTypeId: string
+  contentTypeId?: string
   contentTypeName?: string
-  field: ContentTypeField
+  /** When set, we're editing a component field; use componentsApi and ignore contentTypeId for save */
+  componentId?: string
+  componentName?: string
+  field: ContentTypeField | import('@/lib/api/collections').CollectionField | ComponentField
   onSuccess: () => void
+  useV2?: boolean
 }
+
+const isComponentField = (f: EditFieldModalProps['field']): f is ComponentField =>
+  'component_id' in f && !!f.component_id
 
 export function EditFieldModal({
   open,
   onOpenChange,
   contentTypeId,
   contentTypeName,
+  componentId,
+  componentName,
   field,
   onSuccess,
+  useV2 = false,
 }: EditFieldModalProps) {
+  const isComponentMode = !!componentId
+  const displayName = isComponentMode ? componentName : contentTypeName
+  const entityId = isComponentMode ? componentId : contentTypeId
   const { toast } = useToast()
   const { currentProject } = useProject()
   const [formElement, setFormElement] = useState<FormElement | null>(null)
@@ -55,6 +70,8 @@ export function EditFieldModal({
   const [availableDataModels, setAvailableDataModels] = useState<any[]>([])
   const [dynamicZoneStep, setDynamicZoneStep] = useState<1 | 2>(1)
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([])
+  const [components, setComponents] = useState<Component[]>([])
+  const [loadingComponents, setLoadingComponents] = useState(false)
 
   const {
     register,
@@ -81,15 +98,34 @@ export function EditFieldModal({
     },
   })
 
+  const loadComponents = async () => {
+    if (!currentProject) return
+    try {
+      setLoadingComponents(true)
+      const data = await componentsApi.getAll(currentProject.id)
+      setComponents(data || [])
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({
+        title: 'Error',
+        description: e.message || 'Failed to load components',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoadingComponents(false)
+    }
+  }
+
   useEffect(() => {
-    if (open && field) {
+    if (open && field && currentProject) {
       loadFormElement()
       loadContentTypes()
+      loadComponents()
       setSettingsTab('BASIC')
       setSchemaStep(1)
       setSchemaIconSearch('')
     }
-  }, [open, field])
+  }, [open, field, currentProject])
 
   // Load form element and populate form when formElement is loaded
   useEffect(() => {
@@ -102,16 +138,22 @@ export function EditFieldModal({
     if (!currentProject) return
     try {
       setLoadingContentTypes(true)
-      const data = await contentTypesApi.getAll(currentProject.id)
-      setContentTypes(data || [])
-      // Exclude current data model to prevent circular references
-      const filtered = data.filter(ct => ct.id !== contentTypeId)
-      setAvailableDataModels(filtered || [])
+      if (useV2) {
+        const data = await collectionsApi.getAll(currentProject.id)
+        const arr = data || []
+        setContentTypes(arr)
+        setAvailableDataModels(entityId ? arr.filter((c: { id: string }) => c.id !== entityId) : arr)
+      } else {
+        const data = await contentTypesApi.getAll(currentProject.id)
+        setContentTypes(data || [])
+        const arr = data || []
+        setAvailableDataModels(entityId ? arr.filter((ct: { id: string }) => ct.id !== entityId) : arr)
+      }
     } catch (err: unknown) {
       const e = err as { message?: string }
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load content types',
+        description: e.message || 'Failed to load content models',
         variant: 'destructive',
       })
     } finally {
@@ -122,14 +164,15 @@ export function EditFieldModal({
   const loadFormElement = async () => {
     try {
       setLoading(true)
-      // Find the form element based on field's interface or type
       if (!currentProject) {
         setLoading(false)
         return
       }
       const allElements = await formElementsApi.getAll(currentProject.id)
+      // ComponentField only has type; ContentType/Collection have interface or type
+      const fieldInterface = !isComponentField(field) && 'interface' in field ? field.interface : undefined
       const element = allElements.find(
-        (fe) => fe.key === field.interface || fe.type === field.type || fe.key === field.type
+        (fe) => fe.key === fieldInterface || fe.type === field.type || fe.key === field.type
       )
 
       if (!element) {
@@ -157,9 +200,15 @@ export function EditFieldModal({
   const populateFormFromField = () => {
     if (!formElement || !field) return
 
-    // Extract values from field.options and field.validation
-    const options = field.options || {}
-    const validation = field.validation || {}
+    // ComponentField: name, type, config (required inside config)
+    const isCompField = isComponentField(field)
+    const isV2Field = 'is_required' in field
+    const options = isCompField ? (field.config || {}) : (isV2Field ? (field.config || {}) : (field.options || {}))
+    const validation = isCompField || isV2Field ? {} : (field.validation || {})
+    const fieldName = isCompField ? field.name : ((field as { field?: string; name?: string }).field ?? (field as { name?: string }).name)
+    const required = isCompField
+      ? !!(field.config && (field.config as { required?: boolean }).required)
+      : ((field as { required?: boolean; is_required?: boolean }).required ?? (field as { is_required?: boolean }).is_required ?? false)
 
     // For schema fields, always start at step 1 when editing
     if (formElement.key === 'schema') {
@@ -167,16 +216,16 @@ export function EditFieldModal({
     }
 
     reset({
-      field: field.field,
-      required: field.required || false,
-      hidden: field.hidden || false,
-      readonly: field.readonly || false,
+      field: fieldName,
+      required,
+      hidden: (field as { hidden?: boolean }).hidden ?? options.hidden ?? false,
+      readonly: (field as { readonly?: boolean }).readonly ?? options.readonly ?? false,
       private: options.private || formElement.default_settings?.private || false,
       localized: options.localized || false,
       unique: validation.unique || false,
       minLengthEnabled: !!validation.minLength,
       maxLengthEnabled: !!validation.maxLength,
-      note: field.note || '',
+      note: (field as { note?: string }).note ?? options.note ?? '',
       variant: options.variant || formElement.default_variant || undefined,
       minLength: validation.minLength || undefined,
       maxLength: validation.maxLength || undefined,
@@ -192,12 +241,10 @@ export function EditFieldModal({
       schemaIcon: options.schemaIcon || 'Database',
       schemaId: options.schemaId || undefined,
       schemaRepeatable: options.schemaRepeatable || false,
+      // Component-specific (v2)
+      componentId: options.component_id || options.componentId || undefined,
     })
-    if (
-      formElement.key === 'dynamic_zone' ||
-      formElement.key === 'dynamic-zone' ||
-      formElement.key === 'component'
-    ) {
+    if (formElement.key === 'dynamic_zone' || formElement.key === 'dynamic-zone') {
       setDynamicZoneStep(2)
       const allowedSchemas = options.allowed_schemas || options.allowedSchemas || []
       setSelectedSchemas(Array.isArray(allowedSchemas) ? allowedSchemas : [])
@@ -320,6 +367,17 @@ export function EditFieldModal({
       }
     }
 
+    if (formElement.key === 'component') {
+      if (!data.componentId || data.componentId.trim() === '') {
+        setError('componentId', {
+          type: 'manual',
+          message: 'Please select a component',
+        })
+        return
+      }
+      clearErrors('componentId')
+    }
+
     if (formElement.key === 'dynamic_zone') {
       if (dynamicZoneStep === 1) {
         handleDynamicZoneStep1Next()
@@ -378,7 +436,7 @@ export function EditFieldModal({
             relationType: data.relationType || 'oneWay',
             targetCollection: data.targetCollection,
             targetFieldName: data.targetFieldName,
-            sourceCollection: contentTypeId,
+            sourceCollection: entityId,
           }),
           // Schema-specific options
           ...(formElement.key === 'schema' && {
@@ -386,6 +444,10 @@ export function EditFieldModal({
             schemaIcon: data.schemaIcon,
             schemaId: data.schemaId,
             schemaRepeatable: data.schemaRepeatable,
+          }),
+          // Component-specific options (v2)
+          ...(formElement.key === 'component' && data.componentId && {
+            component_id: data.componentId,
           }),
         },
         validation: {
@@ -402,7 +464,25 @@ export function EditFieldModal({
         note: data.note || formElement.description || undefined,
       }
 
-      await contentTypesApi.updateField(contentTypeId, field.id, updateDto)
+      if (componentId && isComponentField(field)) {
+        const dto: UpdateComponentFieldDto = {
+          name: updateDto.field,
+          type: updateDto.type,
+          required: updateDto.required,
+          config: updateDto.options,
+        }
+        await componentsApi.updateField(componentId, field.id, dto)
+      } else if (useV2 && contentTypeId) {
+        const dto: UpdateCollectionFieldDto = {
+          name: updateDto.field,
+          type: updateDto.type,
+          is_required: updateDto.required,
+          config: updateDto.options,
+        }
+        await collectionsApi.updateField(contentTypeId, field.id, dto)
+      } else if (contentTypeId) {
+        await contentTypesApi.updateField(contentTypeId, field.id, updateDto)
+      }
       toast({
         title: 'Success',
         description: 'Field updated successfully',
@@ -472,8 +552,8 @@ export function EditFieldModal({
                     )
                   })()}
                 </div>
-                {contentTypeName && (
-                  <span className="text-sm text-muted-foreground">{contentTypeName}</span>
+                {(displayName || contentTypeName) && (
+                  <span className="text-sm text-muted-foreground">{displayName ?? contentTypeName}</span>
                 )}
               </>
             )}
@@ -537,8 +617,8 @@ export function EditFieldModal({
                 } as any}
                 saving={saving}
                 settingsTab={settingsTab}
-                contentTypeName={contentTypeName}
-                contentTypeId={contentTypeId}
+                contentTypeName={displayName ?? contentTypeName}
+                contentTypeId={entityId ?? contentTypeId}
                 contentTypes={contentTypes}
                 loadingContentTypes={loadingContentTypes}
                 schemaStep={schemaStep}
@@ -547,8 +627,10 @@ export function EditFieldModal({
                 schemaIconSearch={schemaIconSearch}
                 onSchemaIconSearchChange={setSchemaIconSearch}
                 availableDataModels={availableDataModels}
-                currentDataModelId={contentTypeId}
-                  dynamicZoneStep={dynamicZoneStep}
+                currentDataModelId={entityId ?? contentTypeId}
+                components={components}
+                loadingComponents={loadingComponents}
+                dynamicZoneStep={dynamicZoneStep}
                   onDynamicZoneStep1Next={handleDynamicZoneStep1Next}
                   onDynamicZoneStep2Back={handleDynamicZoneStep2Back}
                   selectedSchemas={selectedSchemas}

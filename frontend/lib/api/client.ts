@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api').replace(/\/+$/, '')
 
 class ApiClient {
   private client: AxiosInstance
@@ -36,6 +36,10 @@ class ApiClient {
           console.log('[ApiClient] Added X-Tenant-ID header:', tenantId);
         } else {
           console.warn('[ApiClient] No tenant_id in localStorage - X-Tenant-ID header not added');
+        }
+
+        if (config.data instanceof FormData && config.headers) {
+          delete config.headers['Content-Type']
         }
 
         return config

@@ -5,7 +5,7 @@
 
 EMAIL="${1:-admin@platform.com}"
 PASSWORD="${2:-admin@123}"
-API_URL="${API_URL:-http://localhost:3001/api/v1}"
+API_URL="${API_URL:-http://localhost:3001/api}"
 
 echo "Testing Platform Admin Login..."
 echo "Email: $EMAIL"

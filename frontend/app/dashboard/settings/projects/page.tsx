@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,7 @@ import { CreateProjectModal } from './components/create-project-modal'
 import { EditProjectModal } from './components/edit-project-modal'
 import { DeleteProjectDialog } from './components/delete-project-dialog'
 
-export default function ProjectsPage() {
+function ProjectsPageContent() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const { projects, loading: projectContextLoading, refreshProjects, currentProject, setCurrentProject, error: projectError } = useProject()
@@ -136,7 +136,7 @@ export default function ProjectsPage() {
             <div>
               <h2 className="text-2xl font-semibold">Projects</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Manage your projects. Each project contains its own data models, content, and settings.
+                Manage your projects. Each project contains its own content models, content, and settings.
               </p>
             </div>
             <Button onClick={() => setCreateModalOpen(true)}>
@@ -284,5 +284,21 @@ export default function ProjectsPage() {
         />
       )}
     </DashboardLayout>
+  )
+}
+
+export default function ProjectsPage() {
+  return (
+    <Suspense
+      fallback={
+        <DashboardLayout basePath="/dashboard" title="Projects" icon={<FolderKanban className="h-5 w-5" />}>
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </DashboardLayout>
+      }
+    >
+      <ProjectsPageContent />
+    </Suspense>
   )
 }

@@ -8,6 +8,7 @@ export interface JwtPayload {
   sub: string; // user id
   email: string;
   tenantId: string | null; // Can be null for Super Admin
+  tenantSlug?: string | null; // URL-friendly tenant slug for tenant users
   roles?: string[];
   iat?: number;
   exp?: number;
@@ -36,10 +37,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     // tenantId can be null for Super Admin
-    // For tenant users, tenantId must be present
     if (payload.tenantId === null || payload.tenantId === undefined) {
-      // Only allow null tenantId for Super Admin
-      if (!payload.roles || !payload.roles.includes('Super Admin')) {
+      const isSuperAdmin = payload.roles?.some((r: string) =>
+        ['Super Admin', 'super_admin'].includes(r),
+      );
+      if (!isSuperAdmin) {
         throw new UnauthorizedException('Invalid token payload: tenantId required for non-Super Admin users');
       }
     }
@@ -47,7 +49,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return {
       userId: payload.sub,
       email: payload.email,
-      tenantId: payload.tenantId, // Can be null for Super Admin
+      tenantId: payload.tenantId,
+      tenantSlug: payload.tenantSlug ?? null,
       roles: payload.roles || [],
     };
   }

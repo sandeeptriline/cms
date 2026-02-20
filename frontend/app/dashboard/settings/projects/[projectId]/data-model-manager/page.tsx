@@ -59,10 +59,10 @@ export default function DataModelManagerPage() {
       setContentTypes(data || [])
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to load data models')
+      setError(e.message || 'Failed to load content models')
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load data models',
+        description: e.message || 'Failed to load content models',
         variant: 'destructive',
       })
     } finally {
@@ -79,11 +79,11 @@ export default function DataModelManagerPage() {
   }
 
   // Convert content types to sidebar items
-  // Structure: "Data Model Manager" label, then all data models
+  // Structure: "Content Model Manager" label, then all content models
   const sidebarItems: SecondarySidebarItem[] = [
     {
       id: 'data-model-manager-label',
-      name: 'Data Model Manager',
+      name: 'Content Model Manager',
       isLabel: true, // Static label, not clickable
     },
     ...(contentTypes.length > 0
@@ -123,20 +123,20 @@ export default function DataModelManagerPage() {
       {loading ? (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model Manager"
+          title="Content Model Manager"
           icon={<FileText className="h-5 w-5" />}
           secondarySidebarItems={[]}
           onSidebarItemClick={handleSidebarItemClick}
         >
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading data models...</span>
+            <span className="ml-2 text-muted-foreground">Loading content models...</span>
           </div>
         </DashboardLayout>
       ) : contentTypes.length === 0 ? (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model Manager"
+          title="Content Model Manager"
           icon={<FileText className="h-5 w-5" />}
           secondarySidebarItems={sidebarItemsWithActive}
           onSidebarItemClick={handleSidebarItemClick}
@@ -151,14 +151,14 @@ export default function DataModelManagerPage() {
               )}
               <div className="border rounded-lg p-12 text-center">
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No data models found</h3>
+                <h3 className="text-lg font-semibold mb-2">No content models found</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Create a data model in the Data Model section first, then come back here to manage entries.
+                  Create a content model in the Content Model section first, then come back here to manage entries.
                 </p>
                 <Button
                   onClick={() => router.push(`/dashboard/settings/projects/${projectId}/data-model`)}
                 >
-                  Go to Data Model
+                  Go to Content Model
                 </Button>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function DataModelManagerPage() {
       ) : (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model Manager"
+          title="Content Model Manager"
           icon={<FileText className="h-5 w-5" />}
           secondarySidebarItems={sidebarItemsWithActive}
           onSidebarItemClick={handleSidebarItemClick}

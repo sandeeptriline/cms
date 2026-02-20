@@ -64,4 +64,22 @@ export class CreateTenantDto {
     apiCalls?: number;
     users?: number;
   };
+
+  @ApiPropertyOptional({
+    description: 'Platform user ID to register as tenant admin in core tenant_users (optional)',
+    example: 'e0000001-0001-0001-0001-000000000001',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID()
+  adminUserId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Plan ID (defaults to Free plan for self-signup)',
+    example: 'd0000000-0001-0001-0001-000000000000',
+    format: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID()
+  planId?: string;
 }

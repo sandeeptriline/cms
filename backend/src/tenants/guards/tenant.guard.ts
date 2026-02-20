@@ -63,7 +63,7 @@ export class TenantGuard implements CanActivate {
     // Check tenant status
     if (tenant.status === tenants_status.suspended) {
       throw new UnauthorizedException(
-        'Tenant is suspended. Please contact the administrator to activate the tenant or use PATCH /api/v1/tenants/:id/activate to activate it.',
+        'Tenant is suspended. Please contact the administrator to activate the tenant or use PATCH /api/tenants/:id/activate to activate it.',
       );
     }
 

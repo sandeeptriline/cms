@@ -7,6 +7,8 @@ import { TextFieldForm } from './text-field-form'
 import { SchemaFieldForm } from './schema-field-form'
 import { RelationFieldForm } from './relation-field-form'
 import { DefaultFieldForm } from './default-field-form'
+import { ComponentFieldForm } from './component-field-form'
+import { DynamicZoneForm } from './dynamic-zone-form'
 
 interface FieldFormRendererProps {
   formElement: FormElement
@@ -25,6 +27,9 @@ interface FieldFormRendererProps {
   onSchemaIconSearchChange?: (value: string) => void
   availableDataModels?: any[]
   currentDataModelId?: string
+  // Component-specific props (v2)
+  components?: import('@/lib/api/components').Component[]
+  loadingComponents?: boolean
   // Dynamic Zone specific props
   dynamicZoneStep?: 1 | 2
   onDynamicZoneStep1Next?: () => void
@@ -33,8 +38,6 @@ interface FieldFormRendererProps {
   onSelectedSchemasChange?: (schemas: string[]) => void
 }
 
-import { DynamicZoneForm } from './dynamic-zone-form'
-
 export function FieldFormRenderer(props: FieldFormRendererProps) {
   const { formElement } = props
 
@@ -42,6 +45,15 @@ export function FieldFormRenderer(props: FieldFormRendererProps) {
   switch (formElement.key) {
     case 'text':
       return <TextFieldForm {...props} />
+
+    case 'component':
+      return (
+        <ComponentFieldForm
+          {...props}
+          components={props.components || []}
+          loadingComponents={props.loadingComponents ?? false}
+        />
+      )
 
     case 'schema':
       return (
@@ -74,8 +86,6 @@ export function FieldFormRenderer(props: FieldFormRendererProps) {
         />
       )
 
-    // Add more specific field types as needed
-    // For now, use DefaultFieldForm for all other types
     default:
       return <DefaultFieldForm {...props} />
   }

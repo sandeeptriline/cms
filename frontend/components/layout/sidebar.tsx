@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useParams, useRouter } from 'next/navigation'
 import { 
   Search,
   User,
@@ -32,6 +32,7 @@ import {
   Users,
   Shield,
   Plus,
+  FolderKanban,
 } from 'lucide-react'
 import { getIconComponent, getDefaultIcon } from '@/lib/utils/icon-library'
 import { cn } from '@/lib/utils'
@@ -58,6 +59,8 @@ import {
   getTenantUserIconItems,
   settingsSubmenuItems,
   getSettingsSubmenuItems,
+  getSubmenuForSection,
+  getActiveSectionHref,
   type MenuItem,
   type SettingsMenuItem,
 } from '@/lib/utils/menu-items'
@@ -103,9 +106,15 @@ export function Sidebar({
   onSidebarItemClick,
 }: SidebarProps) {
   const pathname = usePathname()
+  const params = useParams()
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, logout, tenantSlug: authTenantSlug } = useAuth()
   const { currentProject } = useProject()
+  // Prefer URL params when on /[tenantSlug]/[projectSlug]/... so nav links are correct before context syncs
+  const tenantSlugFromUrl = params?.tenantSlug as string | undefined
+  const projectSlugFromUrl = params?.projectSlug as string | undefined
+  const tenantSlug = authTenantSlug ?? tenantSlugFromUrl ?? null
+  const projectSlug = (currentProject?.slug ?? projectSlugFromUrl) ?? null
 
   // Determine if user is Super Admin
   // Super Admin uses /cp routes, tenant users use /dashboard routes
@@ -123,21 +132,51 @@ export function Sidebar({
     }))
     iconItems = superAdminIconItems
   } else {
-    // Tenant user menu (dynamic based on roles)
-    const tenantMenuItems = getTenantUserMenuItems(user?.roles)
-    navigation = tenantMenuItems.map((item) => ({
-      ...item,
-      href: item.path, // Already includes /dashboard prefix
-    }))
-    iconItems = getTenantUserIconItems(user?.roles)
+    // Tenant: on projects list page always show only Projects icon; after opening a project show full menu
+    const isProjectsListPage =
+      pathname === '/dashboard/projects' ||
+      (typeof pathname === 'string' && /^\/[^/]+\/projects\/?$/.test(pathname))
+    const hasProjectContext = !!(currentProject || (tenantSlug && projectSlug))
+    if (!hasProjectContext || isProjectsListPage) {
+      const projectsHref = tenantSlug ? `/${tenantSlug}/projects` : '#'
+      iconItems = [{ icon: FolderKanban, href: projectsHref, title: 'Projects' }]
+      navigation = [{ name: 'Projects', path: projectsHref, href: projectsHref, icon: FolderKanban }]
+    } else {
+      const tenantMenuItems = getTenantUserMenuItems(user?.roles)
+      navigation = tenantMenuItems.map((item) => ({
+        ...item,
+        href: item.path, // Already includes /dashboard prefix
+      }))
+      iconItems = getTenantUserIconItems(user?.roles, currentProject?.id, tenantSlug, projectSlug)
+    }
   }
 
-  // Directus pattern: Simple active state check using pathname.startsWith()
-  // No complex section detection needed - each icon checks if pathname starts with its path
+  // Normalize pathname for active-state: tenant URLs like /[tenantSlug]/dashboard
+  // should match icon hrefs like /dashboard so the correct icon is highlighted
+  const pathnameForMatch =
+    tenantSlug && pathname?.startsWith(`/${tenantSlug}/`)
+      ? pathname.slice(tenantSlug.length + 1) || '/'
+      : pathname
 
   // Auto-expand sidebar when any primary icon is active (Directus behavior)
   // Sidebar should be visible when not explicitly collapsed
   const shouldShowSidebar = !isCollapsed
+
+  // Sub-menu: expanded sidebar shows children of the active section only (not duplicate main nav)
+  const activeSectionHref = getActiveSectionHref(pathname ?? null, iconItems, pathnameForMatch ?? null)
+  const sectionSubmenuItems: SecondarySidebarItem[] =
+    activeSectionHref && secondarySidebarItems.length === 0
+      ? getSubmenuForSection(activeSectionHref, {
+          isPlatformAdmin: !!isPlatformAdmin,
+          userRoles: user?.roles,
+          projectId: currentProject?.id ?? null,
+          projectSlug,
+          tenantSlug: tenantSlug ?? null,
+        })
+          .filter((item) => !item.requiredRoles?.length || (user?.roles && item.requiredRoles.some((r) => user.roles?.some((ur) => ur.toLowerCase() === r.toLowerCase()))))
+          .map((item) => ({ id: item.id, name: item.name, path: item.path, href: item.path, icon: item.icon, divider: item.divider }))
+      : []
+  const effectiveSidebarItems = secondarySidebarItems.length > 0 ? secondarySidebarItems : sectionSubmenuItems
 
   const handleLogout = async () => {
     try {
@@ -170,7 +209,7 @@ export function Sidebar({
         <div className="flex flex-col w-[52px] h-screen bg-[#6644FF] fixed left-0 top-0 z-50 shadow-lg">
           {/* Logo/Brand Icon - Directus Style */}
           <div 
-            onClick={() => router.push(basePath)}
+            onClick={() => router.push(tenantSlug && basePath === '/dashboard' ? `/${tenantSlug}/dashboard` : basePath)}
             className="flex items-center justify-center h-[52px] cursor-pointer hover:bg-white/10 transition-colors"
           >
             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm">
@@ -178,44 +217,32 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* Icon Navigation - Directus Style */}
+          {/* Icon Navigation - Directus Style - only one icon active (deepest match) */}
           <nav className="flex-1 flex flex-col items-center pt-2 space-y-1">
-            {iconItems.map((item) => {
+            {iconItems.map((item, index) => {
               const Icon = item.icon
-              // Determine which section this icon belongs to based on href
-              const itemSection = item.href === '/dashboard/settings' || item.href === '/cp/settings' ? 'settings' :
-                                 item.href === '/dashboard/files' || item.href === '/cp/files' ? 'files' :
-                                 item.href === '/dashboard/explore' || item.href === '/cp/explore' ? 'explore' :
-                                 item.href === '/dashboard/insights' || item.href === '/cp/insights' ? 'insights' :
-                                 item.href === '/dashboard/documentation' || item.href === '/cp/documentation' ? 'documentation' :
-                                 item.href === '/dashboard/users' || item.href === '/cp/users' ? 'users' :
-                                 item.href === '/dashboard/extensions' || item.href === '/cp/extensions' ? 'extensions' :
-                                 'content'
-              
-              // Active state for primary icons (Directus behavior):
-              // 1. Exact pathname match
-              // 2. Pathname starts with item href + '/' (but not if it's a more specific section)
-              // 3. Active section matches this item's section
-              // Special case: /dashboard should not be active when on /dashboard/settings/*
-              let isActive = false
-              if (pathname === item.href) {
-                isActive = true
-              } else if (item.href === '/dashboard' || item.href === '/cp') {
-                // Content icon: only active if on exact path or content pages (not settings/files/etc)
-                isActive = (pathname === item.href || 
-                           (pathname?.startsWith(item.href + '/') && 
-                            !pathname?.startsWith(item.href + '/settings') &&
-                            !pathname?.startsWith(item.href + '/files') &&
-                            !pathname?.startsWith(item.href + '/explore') &&
-                            !pathname?.startsWith(item.href + '/insights') &&
-                            !pathname?.startsWith(item.href + '/documentation') &&
-                            !pathname?.startsWith(item.href + '/users') &&
-                            !pathname?.startsWith(item.href + '/extensions')))
-              } else {
-                // Other icons: active if pathname starts with href
-                isActive = pathname?.startsWith(item.href + '/')
-              }
-              
+              // Match: direct pathname (for tenant hrefs like /[tenantSlug]/projects) or normalized path (for /dashboard)
+              const pathMatches =
+                pathname === item.href ||
+                (pathname?.startsWith(item.href + '/') ?? false) ||
+                pathnameForMatch === item.href ||
+                (pathnameForMatch?.startsWith(item.href + '/') ?? false)
+              const otherMatches = (href: string) =>
+                pathname === href ||
+                (pathname?.startsWith(href + '/') ?? false) ||
+                pathnameForMatch === href ||
+                (pathnameForMatch?.startsWith(href + '/') ?? false)
+              // Active only if this item matches and no other icon has a longer (or same href but earlier) match
+              const isActive =
+                pathMatches &&
+                !iconItems.some(
+                  (other, otherIdx) =>
+                    otherIdx !== index &&
+                    otherMatches(other.href) &&
+                    (other.href.length > item.href.length ||
+                      (other.href.length === item.href.length && otherIdx < index))
+                )
+
               return (
                 <Tooltip key={item.href}>
                   <TooltipTrigger asChild>
@@ -360,10 +387,10 @@ export function Sidebar({
               </div>
             </div>
 
-            {/* Navigation - Directus Style: Use secondarySidebarItems from props */}
+            {/* Navigation - Sub-menu: items for the active section only (from props or section submenu) */}
             <nav className="flex-1 overflow-y-auto px-2 pb-4">
-              {secondarySidebarItems.length > 0 ? (
-                secondarySidebarItems.map((item, index) => {
+              {effectiveSidebarItems.length > 0 ? (
+                effectiveSidebarItems.map((item, index) => {
                   // Handle dividers - render as separator, not a link
                   if (item.divider) {
                     return <div key={item.id || `divider-${index}`} className="h-px bg-gray-200 my-2 mx-2" />
@@ -372,7 +399,7 @@ export function Sidebar({
                   // Handle labels - render as non-clickable header with optional icon button
                   if (item.isLabel) {
                     // Check if next item is an icon button
-                    const nextItem = secondarySidebarItems[index + 1]
+                    const nextItem = effectiveSidebarItems[index + 1]
                     const hasIconButton = nextItem?.isIconButton
                     
                     return (
@@ -427,12 +454,17 @@ export function Sidebar({
                   // Determine href (use path or href)
                   const itemHref = item.href || item.path || ''
                   
-                  // Directus pattern: Active if pathname includes item.id OR pathname starts with item path
-                  // Also check if item has isActive property (for React state-based routing)
-                  const isActive = (item as any).isActive || 
-                                 pathname?.includes(item.id) || 
-                                 (itemHref && pathname?.startsWith(itemHref)) ||
-                                 false
+                  // Submenu: only one item active – use exact match or "deepest" match so parent isn't active when on a child route
+                  const isActive =
+                    (item as any).isActive ||
+                    (itemHref &&
+                      pathname &&
+                      (pathname === itemHref ||
+                        (pathname.startsWith(itemHref + '/') &&
+                          !effectiveSidebarItems.some((o) => {
+                            const oH = o.href || o.path
+                            return oH && oH !== itemHref && oH.length > itemHref.length && pathname.startsWith(oH)
+                          }))))
 
                   // Handle items with children (expandable)
                   const hasChildren = item.hasChildren && item.children && item.children.length > 0
@@ -490,68 +522,10 @@ export function Sidebar({
                   )
                 })
               ) : (
-                // Fallback: Show settings submenu if on settings page and no items provided
-                (pathname?.startsWith('/dashboard/settings') || pathname?.startsWith('/cp/settings')) && !isPlatformAdmin ? (
-                  getSettingsSubmenuItems(currentProject?.id)
-                    .filter(item => {
-                      if (!item.requiredRoles || item.requiredRoles.length === 0) return true
-                      return item.requiredRoles.some(role => 
-                        user?.roles?.some(userRole => userRole.toLowerCase() === role.toLowerCase())
-                      )
-                    })
-                    .map((item, index) => {
-                      if (item.divider) {
-                        return <div key={`divider-${index}`} className="h-px bg-gray-200 my-2 mx-2" />
-                      }
-                      const Icon = item.icon
-                      const itemHref = item.path || ''
-                      const isActive = pathname === itemHref || pathname?.startsWith(itemHref + '/')
-                      
-                      if (!itemHref) return null
-                      
-                      return (
-                        <Link
-                          key={item.id || item.path || `nav-${index}`}
-                          href={itemHref}
-                          className={cn(
-                            'w-full flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 text-left transition-all duration-150',
-                            isActive
-                              ? 'bg-[#EDE9FE] text-[#6644FF]'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          )}
-                        >
-                          <Icon 
-                            className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-[#6644FF]" : "text-[#9CA3AF]")}
-                          />
-                          <span className="text-sm truncate flex-1">{item.name}</span>
-                        </Link>
-                      )
-                    })
-                ) : (
-                  // Show main navigation as fallback
-                  navigation.map((item, index) => {
-                    const Icon = item.icon
-                    const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
-                    
-                    return (
-                      <Link
-                        key={item.path || `nav-${index}`}
-                        href={item.href}
-                        className={cn(
-                          'w-full flex items-center gap-2 px-2 py-1.5 rounded-md mb-0.5 text-left transition-all duration-150',
-                          isActive
-                            ? 'bg-[#EDE9FE] text-[#6644FF]'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        )}
-                      >
-                        <Icon 
-                          className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-[#6644FF]" : "text-[#9CA3AF]")}
-                        />
-                        <span className="text-sm truncate flex-1">{item.name}</span>
-                      </Link>
-                    )
-                  })
-                )
+                // No sub-items for this section – show hint
+                <div className="px-2 py-4 text-xs text-gray-500 text-center">
+                  Select a section from the left
+                </div>
               )}
             </nav>
           </div>

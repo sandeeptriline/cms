@@ -12,7 +12,16 @@ async function bootstrap() {
   
   // Cookie parser for HTTP-only cookies
   app.use(cookieParser());
-  
+
+  // Normalize double slashes in path (e.g. //api/... -> /api/...) so routes match
+  app.use((req: any, _res, next) => {
+    if (req.url && req.url.startsWith('//')) {
+      req.url = req.url.replace(/^\/+/, '/');
+      if (req.originalUrl) req.originalUrl = req.originalUrl.replace(/^\/+/, '/');
+    }
+    next();
+  });
+
   // Global exception filter for better error logging
   app.useGlobalFilters(new AllExceptionsFilter());
   
@@ -39,8 +48,8 @@ async function bootstrap() {
     }),
   );
   
-  // Global prefix
-  const globalPrefix = process.env.API_PREFIX || 'api/v1';
+  // Global prefix (no leading slash to avoid //api in URLs)
+  const globalPrefix = (process.env.API_PREFIX || 'api').replace(/^\/+/, '');
   app.setGlobalPrefix(globalPrefix);
   
   // Swagger/OpenAPI Configuration
@@ -59,13 +68,13 @@ async function bootstrap() {
 ## Authentication
 
 ### Super Admin (Platform Admin)
-- Use \`POST /api/v1/auth/platform-admin/login\` to authenticate as Super Admin
+- Use \`POST /api/auth/platform-admin/login\` to authenticate as Super Admin
 - No tenant context required
 - Has access to all platform operations
 - Token contains \`tenantId: null\` and \`roles: ["Super Admin"]\`
 
 ### Tenant Users
-- Use \`POST /api/v1/auth/login\` with tenant context (X-Tenant-ID or X-Tenant-Slug header)
+- Use \`POST /api/auth/login\` with tenant context (X-Tenant-ID or X-Tenant-Slug header)
 - Tenant-scoped operations
 - Token contains tenant ID and user roles
 
@@ -144,7 +153,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
   
-  console.log(`🚀 Backend API is running on: http://localhost:${port}/${globalPrefix}`);
+  const base = `http://localhost:${port}`;
+  console.log(`🚀 Backend API is running on: ${base}/${globalPrefix}`);
   console.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
 }
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 echo "=========================================="
 echo "  Tenant Status Checker"
@@ -58,7 +58,7 @@ if [ "$TENANT_STATUS" = "suspended" ]; then
   echo ""
   echo "Or use Swagger UI:"
   echo "  http://localhost:3001/api/docs"
-  echo "  → PATCH /api/v1/tenants/{id}/activate"
+  echo "  → PATCH /api/tenants/{id}/activate"
   echo ""
 elif [ "$TENANT_STATUS" = "provisioning" ]; then
   echo "⏳ Tenant is PROVISIONING"

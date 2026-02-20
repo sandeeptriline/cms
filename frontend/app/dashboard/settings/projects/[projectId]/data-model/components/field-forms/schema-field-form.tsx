@@ -126,7 +126,7 @@ export function SchemaFieldForm({
     )
   }
 
-  // Step 2/2: Configuration (Name + Type + Data Model Select)
+  // Step 2/2: Configuration (Name + Type + Content Model Select)
   return (
     <>
       {/* Name */}
@@ -206,21 +206,21 @@ export function SchemaFieldForm({
         </div>
       </div>
 
-      {/* Data Model Selection */}
+      {/* Content Model Selection */}
       <div className="space-y-2">
         <Label htmlFor="schemaId">
-          Select a data model <span className="text-destructive">*</span>
+          Select a content model <span className="text-destructive">*</span>
         </Label>
         <div className="relative">
           <select
             id="schemaId"
-            {...register('schemaId', { required: 'Please select a data model' })}
+            {...register('schemaId', { required: 'Please select a content model' })}
             disabled={saving || loadingContentTypes}
             className="w-full px-3 py-2 border rounded-md bg-white text-sm appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="">Select a data model...</option>
+            <option value="">Select a content model...</option>
             {loadingContentTypes ? (
-              <option value="" disabled>Loading data models...</option>
+              <option value="" disabled>Loading content models...</option>
             ) : availableDataModels && availableDataModels.length > 0 ? (
               availableDataModels
                 .filter((dm) => !currentDataModelId || dm.id !== currentDataModelId)
@@ -230,7 +230,7 @@ export function SchemaFieldForm({
                   </option>
                 ))
             ) : (
-              <option value="" disabled>No data models available</option>
+              <option value="" disabled>No content models available</option>
             )}
           </select>
           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -239,16 +239,16 @@ export function SchemaFieldForm({
           <p className="text-sm text-destructive">{errors.schemaId.message}</p>
         )}
         {loadingContentTypes && (
-          <p className="text-xs text-muted-foreground">Loading data models...</p>
+          <p className="text-xs text-muted-foreground">Loading content models...</p>
         )}
         {!loadingContentTypes && availableDataModels && availableDataModels.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            No data models found. Create a data model first in the Data Model section.
+            No content models found. Create a content model first in the Content Model section.
           </p>
         )}
         {currentDataModelId && availableDataModels && availableDataModels.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            Current data model is excluded to prevent circular references.
+            Current content model is excluded to prevent circular references.
           </p>
         )}
       </div>

@@ -3,7 +3,7 @@
 # Script to run tenant database migrations for an existing tenant
 # This creates all tables in the tenant database
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 # Find schema file (relative to script location)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

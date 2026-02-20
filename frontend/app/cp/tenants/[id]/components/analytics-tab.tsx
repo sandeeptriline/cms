@@ -15,7 +15,6 @@ import {
   Calendar,
   ArrowUp,
   ArrowDown,
-  Loader2,
 } from 'lucide-react'
 import { Tenant } from '@/lib/api/tenants'
 import { tenantUsersApi } from '@/lib/api/tenant-users'
@@ -151,7 +150,7 @@ export function AnalyticsTab({ tenant, onRefresh }: AnalyticsTabProps) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           title="Storage Used"
-          value={loading ? <Loader2 className="h-6 w-6 animate-spin" /> : `${storageUsedGB.toFixed(2)} GB`}
+          value={loading ? '—' : `${storageUsedGB.toFixed(2)} GB`}
           change={storageChange}
           changeLabel={storageLimit > 0 ? `of ${storageLimitGB.toFixed(2)} GB` : 'Unlimited'}
           icon={<HardDrive className="h-6 w-6" />}
@@ -169,7 +168,7 @@ export function AnalyticsTab({ tenant, onRefresh }: AnalyticsTabProps) {
         />
         <MetricCard
           title="Total Users"
-          value={loading ? <Loader2 className="h-6 w-6 animate-spin" /> : usersCount ?? '-'}
+          value={loading ? '—' : usersCount ?? '-'}
           change={usersChange}
           changeLabel={usersLimit > 0 ? `of ${usersLimit} limit` : 'Unlimited'}
           icon={<Users className="h-6 w-6" />}
@@ -178,7 +177,7 @@ export function AnalyticsTab({ tenant, onRefresh }: AnalyticsTabProps) {
         />
         <MetricCard
           title="Active Users"
-          value={loading ? <Loader2 className="h-6 w-6 animate-spin" /> : activeUsersCount ?? '-'}
+          value={loading ? '—' : activeUsersCount ?? '-'}
           icon={<Activity className="h-6 w-6" />}
           subtitle={usersCount !== null && usersCount > 0 ? `${((activeUsersCount || 0) / usersCount * 100).toFixed(1)}% of total` : undefined}
         />

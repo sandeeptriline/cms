@@ -13,23 +13,32 @@ export class PlatformUsersService {
     private configService: ConfigService,
   ) {}
 
+  /** Role names that count as Super Admin (platform_roles or legacy roles) */
+  private readonly SUPER_ADMIN_NAMES = ['Super Admin', 'super_admin'];
+
+  private hasSuperAdminRole(user: {
+    platform_user_roles?: { role: { name: string } }[];
+    user_roles?: { role: { name: string } }[];
+  }): boolean {
+    const fromPlatform = user.platform_user_roles?.some((pur) =>
+      this.SUPER_ADMIN_NAMES.includes(pur.role.name),
+    );
+    if (fromPlatform) return true;
+    return user.user_roles?.some((ur) => this.SUPER_ADMIN_NAMES.includes(ur.role.name)) ?? false;
+  }
+
   /**
-   * Check if Super Admin exists
+   * Check if Super Admin exists (platform_roles or legacy user_roles)
    */
   async superAdminExists(): Promise<boolean> {
     try {
-      const superAdmin = await this.prisma.users.findFirst({
-        where: {
-          user_roles: {
-            some: {
-              role: {
-                name: 'Super Admin',
-              },
-            },
-          },
+      const users = await this.prisma.users.findMany({
+        where: { status: 1 },
+        include: {
+          platform_user_roles: { include: { role: true } },
         },
       });
-      return !!superAdmin;
+      return users.some((u) => this.hasSuperAdminRole(u));
     } catch (error) {
       this.logger.error('Error checking Super Admin existence:', error);
       return false;
@@ -37,41 +46,26 @@ export class PlatformUsersService {
   }
 
   /**
-   * Get Super Admin user
+   * Get Super Admin user (platform_roles or legacy user_roles)
    */
   async getSuperAdmin() {
-    return this.prisma.users.findFirst({
-      where: {
-        user_roles: {
-          some: {
-            role: {
-              name: 'Super Admin',
-            },
-          },
-        },
-      },
+    const users = await this.prisma.users.findMany({
+      where: { status: 1 },
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
+    return users.find((u) => this.hasSuperAdminRole(u)) ?? null;
   }
 
   /**
-   * Authenticate platform user (Super Admin)
+   * Authenticate platform user (Super Admin) – supports platform_roles and legacy user_roles
    */
   async authenticate(email: string, password: string) {
     const user = await this.prisma.users.findUnique({
       where: { email },
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
 
@@ -84,20 +78,20 @@ export class PlatformUsersService {
       return null;
     }
 
+    if (!this.hasSuperAdminRole(user)) {
+      return null;
+    }
+
     return user;
   }
 
   /**
-   * Get all platform users
+   * Get all platform users (include platform_roles and legacy roles)
    */
   async getAll() {
     return this.prisma.users.findMany({
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
       orderBy: {
         created_at: 'desc',
@@ -112,11 +106,7 @@ export class PlatformUsersService {
     return this.prisma.users.findUnique({
       where: { id },
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
   }
@@ -159,30 +149,18 @@ export class PlatformUsersService {
       },
     });
 
-    // Assign roles if provided
+    // Assign platform roles if provided
     if (data.roleIds && data.roleIds.length > 0) {
-      // Verify all roles exist
-      const roles = await this.prisma.roles.findMany({
-        where: {
-          id: {
-            in: data.roleIds,
-          },
-        },
+      const roles = await this.prisma.platform_roles.findMany({
+        where: { id: { in: data.roleIds } },
       });
-
       if (roles.length !== data.roleIds.length) {
         throw new BadRequestException('One or more roles not found');
       }
-
-      // Assign roles
       await Promise.all(
         data.roleIds.map((roleId) =>
-          this.prisma.user_roles.create({
-            data: {
-              id: uuidv4(),
-              user_id: userId,
-              role_id: roleId,
-            },
+          this.prisma.platform_user_roles.create({
+            data: { user_id: userId, role_id: roleId },
           }),
         ),
       );
@@ -191,11 +169,7 @@ export class PlatformUsersService {
     return this.prisma.users.findUnique({
       where: { id: userId },
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
   }
@@ -253,59 +227,34 @@ export class PlatformUsersService {
       where: { id },
       data: updateData,
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
 
-    // Update roles if provided
+    // Update platform roles if provided
     if (data.roleIds !== undefined) {
-      // Remove all existing roles
-      await this.prisma.user_roles.deleteMany({
+      await this.prisma.platform_user_roles.deleteMany({
         where: { user_id: id },
       });
-
-      // Assign new roles
       if (data.roleIds.length > 0) {
-        // Verify all roles exist
-        const roles = await this.prisma.roles.findMany({
-          where: {
-            id: {
-              in: data.roleIds,
-            },
-          },
+        const roles = await this.prisma.platform_roles.findMany({
+          where: { id: { in: data.roleIds } },
         });
-
         if (roles.length !== data.roleIds.length) {
           throw new BadRequestException('One or more roles not found');
         }
-
-        // Assign roles
         await Promise.all(
           data.roleIds.map((roleId) =>
-            this.prisma.user_roles.create({
-              data: {
-                id: uuidv4(),
-                user_id: id,
-                role_id: roleId,
-              },
+            this.prisma.platform_user_roles.create({
+              data: { user_id: id, role_id: roleId },
             }),
           ),
         );
       }
-
-      // Reload user with updated roles
       return this.prisma.users.findUnique({
         where: { id },
         include: {
-          user_roles: {
-            include: {
-              role: true,
-            },
-          },
+          platform_user_roles: { include: { role: true } },
         },
       });
     }
@@ -330,23 +279,17 @@ export class PlatformUsersService {
       where: { id },
       data: { status: 0 },
       include: {
-        user_roles: {
-          include: {
-            role: true,
-          },
-        },
+        platform_user_roles: { include: { role: true } },
       },
     });
   }
 
   /**
-   * Get all platform roles
+   * Get all platform roles (for assignment to platform users)
    */
   async getRoles() {
-    return this.prisma.roles.findMany({
-      orderBy: {
-        name: 'asc',
-      },
+    return this.prisma.platform_roles.findMany({
+      orderBy: { name: 'asc' },
     });
   }
 }

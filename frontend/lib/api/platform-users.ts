@@ -62,7 +62,7 @@ export const platformUsersApi = {
    */
   async getAll(): Promise<PlatformUser[]> {
     const response = await apiClient.get<PlatformUser[]>('/platform-users')
-    return response.data.map(normalizePlatformUser)
+    return response.data.map((u) => normalizePlatformUser(u as unknown as Record<string, unknown>))
   },
 
   /**
@@ -70,7 +70,7 @@ export const platformUsersApi = {
    */
   async getById(id: string): Promise<PlatformUser> {
     const response = await apiClient.get<PlatformUser>(`/platform-users/${id}`)
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**
@@ -86,7 +86,7 @@ export const platformUsersApi = {
    */
   async create(data: CreatePlatformUserDto): Promise<PlatformUser> {
     const response = await apiClient.post<PlatformUser>('/platform-users', data)
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**
@@ -94,7 +94,7 @@ export const platformUsersApi = {
    */
   async update(id: string, data: UpdatePlatformUserDto): Promise<PlatformUser> {
     const response = await apiClient.put<PlatformUser>(`/platform-users/${id}`, data)
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**
@@ -102,7 +102,7 @@ export const platformUsersApi = {
    */
   async delete(id: string): Promise<PlatformUser> {
     const response = await apiClient.delete<PlatformUser>(`/platform-users/${id}`)
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**
@@ -110,7 +110,7 @@ export const platformUsersApi = {
    */
   async getMe(): Promise<PlatformUser> {
     const response = await apiClient.get<PlatformUser>('/platform-users/me')
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**
@@ -118,7 +118,7 @@ export const platformUsersApi = {
    */
   async updateMe(data: UpdatePlatformUserDto): Promise<PlatformUser> {
     const response = await apiClient.put<PlatformUser>('/platform-users/me', data)
-    return normalizePlatformUser(response.data)
+    return normalizePlatformUser(response.data as unknown as Record<string, unknown>)
   },
 
   /**

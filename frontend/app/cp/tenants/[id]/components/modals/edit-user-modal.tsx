@@ -64,11 +64,13 @@ export function EditUserModal({ open, onOpenChange, tenantId, user, onSuccess }:
         // For now, we'll need to get role IDs from the user object
         // The user object has roles as names, but we need IDs
         // We'll need to match role names to IDs
+        const statusStr = String(user.status)
+        const status = (statusStr === '1' || statusStr === '0' || statusStr === '-1' ? statusStr : undefined) as '0' | '1' | '-1' | undefined
         reset({
           email: user.email,
           name: user.name || '',
           password: '',
-          status: String(user.status),
+          status,
           roleIds: [],
         })
         setSelectedRoleIds([]) // Will be populated after roles load

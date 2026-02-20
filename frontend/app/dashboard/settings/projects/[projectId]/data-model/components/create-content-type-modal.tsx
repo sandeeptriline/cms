@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -47,6 +48,8 @@ export function CreateContentTypeModal({
   onOpenChange,
   onSuccess,
 }: CreateContentTypeModalProps) {
+  const params = useParams()
+  const projectId = params?.projectId as string | undefined
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
 
@@ -80,10 +83,12 @@ export function CreateContentTypeModal({
   )
 
   const onSubmit = async (data: CreateContentTypeFormData) => {
+    if (!projectId) return
     try {
       setSaving(true)
       
       const createDto: CreateContentTypeDto = {
+        projectId,
         name: data.name,
         collection: data.collection,
         icon: data.icon || 'FileText', // Default to FileText if no icon selected
@@ -95,7 +100,7 @@ export function CreateContentTypeModal({
       const created = await contentTypesApi.create(createDto)
       toast({
         title: 'Success',
-        description: 'Data model created successfully',
+        description: 'Content model created successfully',
       })
       reset()
       onOpenChange(false)
@@ -104,7 +109,7 @@ export function CreateContentTypeModal({
       const e = err as { message?: string }
       toast({
         title: 'Error',
-        description: e.message || 'Failed to create data model',
+        description: e.message || 'Failed to create content model',
         variant: 'destructive',
       })
     } finally {
@@ -123,9 +128,9 @@ export function CreateContentTypeModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[900px] max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Create Data Model</DialogTitle>
+          <DialogTitle>Create Content Model</DialogTitle>
           <DialogDescription>
-            Create a new data model to define the structure of your content entries. You can add fields after creating the data model.
+            Create a new content model to define the structure of your content entries. You can add fields after creating the content model.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>

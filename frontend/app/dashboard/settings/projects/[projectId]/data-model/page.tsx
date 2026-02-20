@@ -12,11 +12,15 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { contentTypesApi, ContentType } from '@/lib/api/content-types'
+import { collectionsApi, Collection } from '@/lib/api/collections'
 import { useToast } from '@/lib/hooks/use-toast'
 import { useProject } from '@/contexts/project-context'
 import { ProjectRouteGuard } from '@/components/auth/project-route-guard'
 import { CreateDataModelModal } from './components/create-data-model-modal'
 import { DataModelView } from './components/data-model-view'
+
+/** Unified type for list items (content type or collection) */
+type DataModelItem = ContentType | Collection
 
 export default function DataModelPage() {
   const params = useParams()
@@ -24,7 +28,8 @@ export default function DataModelPage() {
   const { toast } = useToast()
   const { currentProject, loading: projectLoading } = useProject()
   const projectId = params?.projectId as string
-  const [contentTypes, setContentTypes] = useState<ContentType[]>([])
+  const [contentTypes, setContentTypes] = useState<DataModelItem[]>([])
+  const [useV2, setUseV2] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -63,14 +68,21 @@ export default function DataModelPage() {
     try {
       setLoading(true)
       setError(null)
-      const data = await contentTypesApi.getAll(projectId)
-      setContentTypes(data || [])
+      try {
+        const data = await collectionsApi.getAll(projectId)
+        setContentTypes(data || [])
+        setUseV2(true)
+      } catch {
+        const data = await contentTypesApi.getAll(projectId)
+        setContentTypes(data || [])
+        setUseV2(false)
+      }
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to load data models')
+      setError(e.message || 'Failed to load content models')
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load data models',
+        description: e.message || 'Failed to load content models',
         variant: 'destructive',
       })
     } finally {
@@ -78,11 +90,10 @@ export default function DataModelPage() {
     }
   }
 
-  const handleCreateSuccess = (newContentType?: ContentType) => {
+  const handleCreateSuccess = (newItem?: DataModelItem) => {
     loadContentTypes()
-    // If a new content type was created, select it
-    if (newContentType) {
-      setSelectedContentTypeId(newContentType.id)
+    if (newItem) {
+      setSelectedContentTypeId(newItem.id)
     }
   }
 
@@ -100,16 +111,16 @@ export default function DataModelPage() {
   }
 
   // Convert content types to sidebar items
-  // Structure: "Data Model" label with "+" icon button, then all data models
+  // Structure: "Content Model" label with "+" icon button, then all content models
   const sidebarItems: SecondarySidebarItem[] = [
     {
       id: 'data-model-label',
-      name: 'Data Model',
+      name: 'Content Model',
       isLabel: true, // Static label, not clickable
     },
     {
       id: 'create-data-model',
-      name: 'Create Data Model',
+      name: 'Create Content Model',
       icon: 'Plus',
       isIconButton: true, // Render as icon-only button next to label
     },
@@ -125,8 +136,8 @@ export default function DataModelPage() {
     ...contentTypes.map((ct) => ({
       id: ct.id,
       name: ct.name,
-      icon: ct.icon || 'FileText', // Use icon from content type or default to FileText
-      indent: true, // Indent under label
+      icon: ('icon' in ct && ct.icon) || 'FileText',
+      indent: true,
     })),
   ]
 
@@ -150,20 +161,20 @@ export default function DataModelPage() {
       {loading ? (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model"
+          title="Content Models"
           icon={<Database className="h-5 w-5" />}
           secondarySidebarItems={[]}
           onSidebarItemClick={handleSidebarItemClick}
         >
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-muted-foreground">Loading data models...</span>
+            <span className="ml-2 text-muted-foreground">Loading content models...</span>
           </div>
         </DashboardLayout>
       ) : contentTypes.length === 0 ? (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model"
+          title="Content Models"
           icon={<Database className="h-5 w-5" />}
           secondarySidebarItems={sidebarItemsWithActive}
           onSidebarItemClick={handleSidebarItemClick}
@@ -178,13 +189,13 @@ export default function DataModelPage() {
               )}
               <div className="border rounded-lg p-12 text-center">
                 <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No data models</h3>
+                <h3 className="text-lg font-semibold mb-2">No content models</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Get started by creating your first data model
+                  Get started by creating your first content model
                 </p>
                 <Button onClick={() => setCreateModalOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Data Model
+                  Create Content Model
                 </Button>
               </div>
             </div>
@@ -195,12 +206,14 @@ export default function DataModelPage() {
             open={createModalOpen}
             onOpenChange={setCreateModalOpen}
             onSuccess={handleCreateSuccess}
+            useV2={useV2}
+            projectId={projectId}
           />
         </DashboardLayout>
       ) : (
         <DashboardLayout
           basePath="/dashboard"
-          title="Data Model"
+          title="Content Models"
           icon={<Database className="h-5 w-5" />}
           secondarySidebarItems={sidebarItemsWithActive}
           onSidebarItemClick={handleSidebarItemClick}
@@ -209,6 +222,8 @@ export default function DataModelPage() {
             <DataModelView
               contentTypeId={selectedContentTypeId}
               onRefresh={handleRefresh}
+              useV2={useV2}
+              projectId={projectId}
             />
           ) : (
             <div className="flex items-center justify-center py-12">
@@ -222,6 +237,8 @@ export default function DataModelPage() {
             open={createModalOpen}
             onOpenChange={setCreateModalOpen}
             onSuccess={handleCreateSuccess}
+            useV2={useV2}
+            projectId={projectId}
           />
         </DashboardLayout>
       )}

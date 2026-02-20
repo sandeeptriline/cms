@@ -19,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Loader2, Search } from 'lucide-react'
 import { iconLibrary, getIconComponent, getDefaultIcon } from '@/lib/utils/icon-library'
 import { contentTypesApi, CreateContentTypeDto, ContentType } from '@/lib/api/content-types'
+import { collectionsApi, CreateCollectionDto, Collection } from '@/lib/api/collections'
 import { useToast } from '@/lib/hooks/use-toast'
 import { useProject } from '@/contexts/project-context'
 
@@ -40,16 +41,21 @@ type CreateContentTypeFormData = z.infer<typeof createContentTypeSchema>
 interface CreateDataModelModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess: (contentType?: ContentType) => void
+  onSuccess: (contentType?: ContentType | Collection) => void
+  useV2?: boolean
+  projectId?: string
 }
 
 export function CreateDataModelModal({
   open,
   onOpenChange,
   onSuccess,
+  useV2 = false,
+  projectId: projectIdProp,
 }: CreateDataModelModalProps) {
   const { toast } = useToast()
   const { currentProject } = useProject()
+  const projectId = projectIdProp ?? currentProject?.id
   const [saving, setSaving] = useState(false)
 
   const {
@@ -59,6 +65,7 @@ export function CreateDataModelModal({
     reset,
     watch,
     setValue,
+    setError,
   } = useForm<CreateContentTypeFormData>({
     resolver: zodResolver(createContentTypeSchema),
     defaultValues: {
@@ -82,7 +89,7 @@ export function CreateDataModelModal({
   )
 
   const onSubmit = async (data: CreateContentTypeFormData) => {
-    if (!currentProject) {
+    if (!projectId) {
       toast({
         title: 'Error',
         description: 'No project selected. Please select a project first.',
@@ -93,21 +100,35 @@ export function CreateDataModelModal({
 
     try {
       setSaving(true)
-      
+
+      if (useV2) {
+        const createDto: CreateCollectionDto = {
+          projectId,
+          name: data.name,
+          slug: data.collection,
+          config: data.icon || data.note ? { icon: data.icon || 'FileText', note: data.note, singleton: data.singleton, hidden: data.hidden } : undefined,
+        }
+        const created = await collectionsApi.create(createDto)
+        toast({ title: 'Success', description: 'Content model created successfully' })
+        reset()
+        onOpenChange(false)
+        onSuccess(created)
+        return
+      }
+
       const createDto: CreateContentTypeDto = {
-        projectId: currentProject.id,
+        projectId,
         name: data.name,
         collection: data.collection,
-        icon: data.icon || 'FileText', // Default to FileText if no icon selected
+        icon: data.icon || 'FileText',
         singleton: data.singleton,
         note: data.note || undefined,
         hidden: data.hidden,
       }
-      
       const created = await contentTypesApi.create(createDto)
       toast({
         title: 'Success',
-        description: 'Data model created successfully',
+        description: 'Content model created successfully',
       })
       reset()
       onOpenChange(false)
@@ -122,7 +143,7 @@ export function CreateDataModelModal({
       }
       toast({
         title: 'Error',
-        description: e.message || 'Failed to create data model',
+        description: e.message || 'Failed to create content model',
         variant: 'destructive',
       })
     } finally {
@@ -141,9 +162,9 @@ export function CreateDataModelModal({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[900px] max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>Create Data Model</DialogTitle>
+          <DialogTitle>Create Content Model</DialogTitle>
           <DialogDescription>
-            Create a new data model to define the structure of your content entries. You can add fields after creating the data model.
+            Create a new content model to define the structure of your content entries. You can add fields after creating the content model.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>

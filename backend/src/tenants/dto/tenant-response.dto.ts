@@ -33,6 +33,18 @@ export class TenantResponseDto {
   dbName: string;
 
   @ApiPropertyOptional({
+    description: 'Dedicated database user for this tenant (created during provisioning)',
+    example: 'cms_t_acme_corp',
+  })
+  dbUser?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Database password for the tenant DB user. Store securely.',
+    example: '••••••••',
+  })
+  dbPassword?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Database host',
     example: 'localhost',
   })

@@ -6,6 +6,8 @@ export interface Tenant {
   slug: string
   status: 'provisioning' | 'active' | 'suspended' | 'deleted'
   dbName: string
+  dbUser?: string | null
+  dbPassword?: string | null
   parentId?: string | null
   dbHost?: string | null
   dbConnection?: string | null
@@ -36,6 +38,8 @@ function normalizeTenant(raw: Record<string, unknown>): Tenant {
     slug: String(raw.slug),
     status: (raw.status as Tenant['status']) ?? 'provisioning',
     dbName: String((raw.dbName ?? raw.db_name) ?? ''),
+    dbUser: (raw.dbUser ?? raw.db_user) as string | null | undefined,
+    dbPassword: (raw.dbPassword ?? raw.db_password) as string | null | undefined,
     parentId: (raw.parentId ?? raw.parent_id) as string | null | undefined,
     dbHost: (raw.dbHost ?? raw.db_host) as string | null | undefined,
     dbConnection: (raw.dbConnection ?? raw.db_connection) as string | null | undefined,
@@ -48,14 +52,14 @@ function normalizeTenant(raw: Record<string, unknown>): Tenant {
     apiCallsLimit: (raw.apiCallsLimit ?? raw.api_calls_limit) as number | null | undefined,
     usersCount: (raw.usersCount ?? raw.users_count) as number | null | undefined,
     usersLimit: (raw.usersLimit ?? raw.users_limit) as number | null | undefined,
-    lastActivityAt: (raw.lastActivityAt ?? (raw.last_activity_at != null ? (typeof raw.last_activity_at === 'string' ? raw.last_activity_at : new Date(raw.last_activity_at).toISOString()) : null)) as string | null | undefined,
-    provisionedAt: (raw.provisionedAt ?? (raw.provisioned_at != null ? (typeof raw.provisioned_at === 'string' ? raw.provisioned_at : new Date(raw.provisioned_at).toISOString()) : null)) as string | null | undefined,
+    lastActivityAt: (raw.lastActivityAt ?? (raw.last_activity_at != null ? (typeof raw.last_activity_at === 'string' ? raw.last_activity_at : new Date(raw.last_activity_at as string | number).toISOString()) : null)) as string | null | undefined,
+    provisionedAt: (raw.provisionedAt ?? (raw.provisioned_at != null ? (typeof raw.provisioned_at === 'string' ? raw.provisioned_at : new Date(raw.provisioned_at as string | number).toISOString()) : null)) as string | null | undefined,
     createdAt: typeof (raw.createdAt ?? raw.created_at) === 'string' 
       ? (raw.createdAt ?? raw.created_at) as string
-      : new Date(raw.createdAt ?? raw.created_at).toISOString(),
+      : new Date((raw.createdAt ?? raw.created_at) as string | number).toISOString(),
     updatedAt: typeof (raw.updatedAt ?? raw.updated_at) === 'string'
       ? (raw.updatedAt ?? raw.updated_at) as string
-      : new Date(raw.updatedAt ?? raw.updated_at).toISOString(),
+      : new Date((raw.updatedAt ?? raw.updated_at) as string | number).toISOString(),
   }
 }
 
@@ -123,5 +127,14 @@ export const tenantsApi = {
 
   async delete(id: string): Promise<void> {
     await apiClient.delete(`/tenants/${id}`)
+  },
+
+  /**
+   * Reset tenant database to Composable Content Graph v2 structure.
+   * Drops all tables and recreates them. All tenant data is permanently lost.
+   */
+  async resetTenantDb(id: string): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(`/tenants/${id}/reset-db`)
+    return response.data
   },
 }

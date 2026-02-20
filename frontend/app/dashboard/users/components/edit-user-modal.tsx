@@ -65,11 +65,13 @@ export function EditTenantUserModal({
   useEffect(() => {
     if (open && user) {
       loadRoles()
+      const statusStr = String(user.status)
+      const status = (statusStr === '1' || statusStr === '0' || statusStr === '-1' ? statusStr : undefined) as '0' | '1' | '-1' | undefined
       reset({
         email: user.email,
         name: user.name || '',
         password: '',
-        status: String(user.status),
+        status,
         roleIds: [],
       })
       setSelectedRoleIds([]) // Will be populated after roles load

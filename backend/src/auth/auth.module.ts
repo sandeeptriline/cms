@@ -10,10 +10,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { TenantPrismaService } from '../prisma/tenant-prisma.service';
 import { TenantsModule } from '../tenants/tenants.module';
 import { PlatformUsersModule } from '../platform-users/platform-users.module';
+import { TenantUsersModule } from '../tenant-users/tenant-users.module';
 
 @Module({
   imports: [
-    ConfigModule, // Add ConfigModule for ConfigService injection
+    ConfigModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -29,8 +30,9 @@ import { PlatformUsersModule } from '../platform-users/platform-users.module';
       inject: [ConfigService],
     }),
     PrismaModule,
-    TenantsModule, // For TenantGuard
-    PlatformUsersModule, // For PlatformUsersService
+    TenantsModule,
+    PlatformUsersModule,
+    TenantUsersModule,
   ],
   controllers: [AuthController],
   providers: [

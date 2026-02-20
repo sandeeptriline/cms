@@ -1,0 +1,11 @@
+-- Add sort_order to component_fields table (v2 tenant DB) for field ordering in the UI.
+-- Run this on tenant DBs that were created before sort_order was added to tenant-db-init-v2.sql.
+--
+-- Steps:
+-- 1. Find your tenant's DB name: SELECT db_name FROM tenants WHERE id = '<tenant_id>';
+-- 2. Connect to MySQL and run:
+--    USE <tenant_db_name>;
+--    SOURCE /path/to/tenant-db-add-component-field-sort-order-v2.sql;
+--
+-- Run once per tenant DB. Fails if sort_order already exists (safe to ignore in that case).
+ALTER TABLE component_fields ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER config;

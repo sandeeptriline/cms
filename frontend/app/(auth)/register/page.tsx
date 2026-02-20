@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -13,11 +13,15 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Github } from 'lucide-react'
 
 const registerSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  name: z.string().min(2, 'Organization name must be at least 2 characters'),
+  slug: z
+    .string()
+    .min(2, 'Slug must be at least 2 characters')
+    .regex(/^[a-z0-9-]+$/, 'Slug: only lowercase letters, numbers, and hyphens'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string(),
-  tenantId: z.string().min(1, 'Tenant ID is required'),
+  adminName: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ['confirmPassword'],
@@ -27,7 +31,7 @@ type RegisterFormData = z.infer<typeof registerSchema>
 
 export default function RegisterPage() {
   const router = useRouter()
-  const { register: registerUser, isAuthenticated } = useAuth()
+  const { registerTenant, isAuthenticated, user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -37,13 +41,15 @@ export default function RegisterPage() {
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: {
-      tenantId: typeof window !== 'undefined' ? localStorage.getItem('tenant_id') || '' : '',
-    },
   })
 
-  if (isAuthenticated && typeof window !== 'undefined') {
-    router.push('/dashboard')
+  useEffect(() => {
+    if (!isAuthenticated || typeof window === 'undefined') return
+    if (user?.tenantSlug) router.push(`/${user.tenantSlug}/projects`)
+    else router.push('/dashboard/projects')
+  }, [isAuthenticated, user?.tenantSlug, router])
+
+  if (isAuthenticated) {
     return null
   }
 
@@ -52,10 +58,16 @@ export default function RegisterPage() {
     setError(null)
 
     try {
-      await registerUser(data.email, data.password, data.name, data.tenantId)
-      router.push('/dashboard')
+      const { tenantSlug } = await registerTenant({
+        name: data.name,
+        slug: data.slug,
+        email: data.email,
+        password: data.password,
+        adminName: data.adminName,
+      })
+      router.push(tenantSlug ? `/${tenantSlug}/projects` : '/dashboard/projects')
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Registration failed. Please try again.')
+      setError(err?.response?.data?.message || 'Sign up failed. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -144,10 +156,10 @@ export default function RegisterPage() {
               Cloud Dashboard
             </div>
             <h1 className="text-3xl font-bold text-gray-900 mb-3">
-              Create Your Account
+              Create Your Organization
             </h1>
             <p className="text-sm text-gray-600 leading-relaxed">
-              Start building with CMS Platform today. Get started for free.{' '}
+              Sign up for a free workspace. {' '}
               <Link href="/docs" className="text-[#6366f1] hover:underline font-medium">
                 Learn More
               </Link>
@@ -165,29 +177,29 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
               <Input
-                id="tenantId"
-                type="text"
-                placeholder="Tenant ID"
-                {...register('tenantId')}
-                disabled={isLoading}
-                className="h-12 border-gray-300 focus:border-[#6366f1] focus:ring-[#6366f1] rounded-lg"
-              />
-              {errors.tenantId && (
-                <p className="text-sm text-red-600">{errors.tenantId.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Input
                 id="name"
                 type="text"
-                placeholder="Full Name"
+                placeholder="Organization name"
                 {...register('name')}
                 disabled={isLoading}
                 className="h-12 border-gray-300 focus:border-[#6366f1] focus:ring-[#6366f1] rounded-lg"
               />
               {errors.name && (
                 <p className="text-sm text-red-600">{errors.name.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                id="slug"
+                type="text"
+                placeholder="URL slug (e.g. my-company)"
+                {...register('slug')}
+                disabled={isLoading}
+                className="h-12 border-gray-300 focus:border-[#6366f1] focus:ring-[#6366f1] rounded-lg"
+              />
+              {errors.slug && (
+                <p className="text-sm text-red-600">{errors.slug.message}</p>
               )}
             </div>
 
@@ -231,6 +243,17 @@ export default function RegisterPage() {
               {errors.confirmPassword && (
                 <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                id="adminName"
+                type="text"
+                placeholder="Your name (optional)"
+                {...register('adminName')}
+                disabled={isLoading}
+                className="h-12 border-gray-300 focus:border-[#6366f1] focus:ring-[#6366f1] rounded-lg"
+              />
             </div>
 
             <div className="pt-2">

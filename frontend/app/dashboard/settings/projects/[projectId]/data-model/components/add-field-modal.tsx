@@ -18,7 +18,9 @@ import {
 } from 'lucide-react'
 import { iconLibrary, getIconComponent } from '@/lib/utils/icon-library'
 import { contentTypesApi, CreateFieldDto } from '@/lib/api/content-types'
+import { collectionsApi, CreateCollectionFieldDto } from '@/lib/api/collections'
 import { formElementsApi, FormElement } from '@/lib/api/form-elements'
+import { componentsApi, Component } from '@/lib/api/components'
 import { useToast } from '@/lib/hooks/use-toast'
 import { useProject } from '@/contexts/project-context'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +33,7 @@ interface AddFieldModalProps {
   contentTypeId: string
   contentTypeName?: string
   onSuccess: () => void
+  useV2?: boolean
 }
 
 type ViewMode = 'selection' | 'configuration'
@@ -41,6 +44,7 @@ export function AddFieldModal({
   contentTypeId,
   contentTypeName,
   onSuccess,
+  useV2 = false,
 }: AddFieldModalProps) {
   const { toast } = useToast()
   const { currentProject } = useProject()
@@ -60,6 +64,9 @@ export function AddFieldModal({
   // Dynamic Zone specific state
   const [dynamicZoneStep, setDynamicZoneStep] = useState<1 | 2>(1)
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([])
+  // Component-specific state (v2)
+  const [components, setComponents] = useState<Component[]>([])
+  const [loadingComponents, setLoadingComponents] = useState(false)
 
   const {
     register,
@@ -95,29 +102,30 @@ export function AddFieldModal({
     }
     try {
       setLoadingContentTypes(true)
-      console.log('[AddFieldModal] Loading content types for project:', currentProject.id)
-      const data = await contentTypesApi.getAll(currentProject.id)
-      console.log('[AddFieldModal] Content types loaded:', data, 'Count:', data?.length)
-      const contentTypesArray = Array.isArray(data) ? data : []
-      setContentTypes(contentTypesArray)
-      // Set available data models (excluding current one to prevent circular references)
-      setAvailableDataModels(contentTypesArray)
-      console.log('[AddFieldModal] Available data models set:', contentTypesArray.length)
+      if (useV2) {
+        const data = await collectionsApi.getAll(currentProject.id)
+        const arr = Array.isArray(data) ? data : []
+        setContentTypes(arr)
+        setAvailableDataModels(arr)
+      } else {
+        const data = await contentTypesApi.getAll(currentProject.id)
+        const contentTypesArray = Array.isArray(data) ? data : []
+        setContentTypes(contentTypesArray)
+        setAvailableDataModels(contentTypesArray)
+      }
     } catch (err: unknown) {
-      console.error('[AddFieldModal] Error loading content types:', err)
       const e = err as { message?: string }
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load content types',
+        description: e.message || 'Failed to load content models',
         variant: 'destructive',
       })
-      // Set empty array on error to prevent undefined issues
       setContentTypes([])
       setAvailableDataModels([])
     } finally {
       setLoadingContentTypes(false)
     }
-  }, [currentProject, toast])
+  }, [currentProject, toast, useV2])
 
   const loadFormElements = useCallback(async () => {
     if (!currentProject) return
@@ -137,10 +145,29 @@ export function AddFieldModal({
     }
   }, [currentProject, toast])
 
+  const loadComponents = useCallback(async () => {
+    if (!currentProject) return
+    try {
+      setLoadingComponents(true)
+      const data = await componentsApi.getAll(currentProject.id)
+      setComponents(data || [])
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({
+        title: 'Error',
+        description: e.message || 'Failed to load components',
+        variant: 'destructive',
+      })
+    } finally {
+      setLoadingComponents(false)
+    }
+  }, [currentProject, toast])
+
   useEffect(() => {
     if (open && currentProject) {
       loadFormElements()
       loadContentTypes()
+      loadComponents()
       setViewMode('selection')
       setSelectedFormElement(null)
       setSchemaStep(1)
@@ -150,7 +177,7 @@ export function AddFieldModal({
       setSettingsTab('BASIC')
       reset()
     }
-  }, [open, currentProject, reset, loadContentTypes, loadFormElements])
+  }, [open, currentProject, reset, loadContentTypes, loadFormElements, loadComponents])
 
   // Reset to BASIC tab when schema step changes to 1
   useEffect(() => {
@@ -201,6 +228,7 @@ export function AddFieldModal({
       schemaIcon: 'Database',
       schemaId: undefined,
       schemaRepeatable: false,
+      componentId: undefined,
     })
   }
 
@@ -272,10 +300,22 @@ export function AddFieldModal({
       if (!data.schemaId) {
         setError('schemaId', {
           type: 'manual',
-          message: 'Please select a data model',
+          message: 'Please select a content model',
         })
         return
       }
+    }
+
+    // Component field validation (v2)
+    if (selectedFormElement.key === 'component') {
+      if (!data.componentId || data.componentId.trim() === '') {
+        setError('componentId', {
+          type: 'manual',
+          message: 'Please select a component',
+        })
+        return
+      }
+      clearErrors('componentId')
     }
 
     // Dynamic Zone validation
@@ -355,6 +395,10 @@ export function AddFieldModal({
             schemaId: data.schemaId,
             schemaRepeatable: data.schemaRepeatable,
           }),
+          // Component options (v2)
+          ...(selectedFormElement.key === 'component' && data.componentId && {
+            component_id: data.componentId,
+          }),
           // Dynamic Zone options
           ...(selectedFormElement.key === 'dynamic_zone' && {
             allowed_schemas: selectedSchemas,
@@ -374,7 +418,17 @@ export function AddFieldModal({
         note: data.note || selectedFormElement.description || undefined,
       }
 
-      await contentTypesApi.addField(contentTypeId, fieldDto)
+      if (useV2) {
+        const dto: CreateCollectionFieldDto = {
+          name: fieldDto.field,
+          type: fieldDto.type,
+          is_required: fieldDto.required,
+          config: fieldDto.options,
+        }
+        await collectionsApi.addField(contentTypeId, dto)
+      } else {
+        await contentTypesApi.addField(contentTypeId, fieldDto)
+      }
       toast({
         title: 'Success',
         description: 'Field added successfully',
@@ -485,9 +539,9 @@ export function AddFieldModal({
 
   // Separate into two sections:
   // Section 1: Regular fields (text, rich text blocks, number, date, media, relation, rich text markdown, boolean, json, email, password, enumeration, UID)
-  // Section 2: Schema and Dynamic Zone
+  // Section 2: Schema, Component & Dynamic Zone (reference data model or reusable component)
   const section1Fields = ['text', 'rich_text_blocks', 'number', 'date', 'media', 'relation', 'markdown', 'boolean', 'json', 'email', 'password', 'enumeration', 'uid']
-  const section2Fields = ['schema', 'dynamic_zone']
+  const section2Fields = ['schema', 'component', 'dynamic_zone']
 
   const section1Elements = displayElements.filter((fe) => section1Fields.includes(fe.key)).sort((a, b) => {
     const aIndex = section1Fields.indexOf(a.key)
@@ -622,7 +676,7 @@ export function AddFieldModal({
                   </div>
                 )}
 
-                {/* Section 2: Schema and Dynamic Zone */}
+                {/* Section 2: Schema, Component & Dynamic Zone */}
                 {section2Elements.length > 0 && (
                   <div>
                     <div className="mb-3">
@@ -734,11 +788,15 @@ export function AddFieldModal({
               <DialogTitle>
                 {selectedFormElement?.key === 'schema'
                   ? `Add new schema (${schemaStep}/2)`
-                  : `Add new ${selectedFormElement?.name || 'field'} field`
+                  : selectedFormElement?.key === 'component'
+                    ? 'Add new Component field'
+                    : `Add new ${selectedFormElement?.name || 'field'} field`
                 }
               </DialogTitle>
               <DialogDescription>
-                {selectedFormElement?.description || 'Configure the field settings'}
+                {selectedFormElement?.key === 'component'
+                  ? 'Choose a reusable component and give this field a name. The component\'s fields will be embedded in entries of this content model.'
+                  : (selectedFormElement?.description || 'Configure the field settings')}
               </DialogDescription>
             </DialogHeader>
 
@@ -799,6 +857,8 @@ export function AddFieldModal({
                     onSchemaIconSearchChange={setSchemaIconSearch}
                     availableDataModels={availableDataModels}
                     currentDataModelId={contentTypeId}
+                    components={components}
+                    loadingComponents={loadingComponents}
                     // Dynamic Zone props
                     dynamicZoneStep={dynamicZoneStep}
                     onDynamicZoneStep1Next={handleDynamicZoneStep1Next}

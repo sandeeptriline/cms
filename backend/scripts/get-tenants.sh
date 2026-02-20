@@ -5,7 +5,7 @@
 echo "=== Listing All Tenants ==="
 echo ""
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 # Check if server is running
 if ! curl -s "$API_URL" > /dev/null 2>&1; then

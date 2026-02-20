@@ -43,9 +43,14 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
 
     const parts = pathname?.split('/').filter(Boolean) || []
     const breadcrumbs: BreadcrumbItem[] = []
+    const isCp = pathname?.startsWith('/cp')
 
-    // Always start with Dashboard
-    breadcrumbs.push({ label: 'Dashboard', href: '/dashboard' })
+    // First segment: Dashboard for /dashboard, Control Panel for /cp
+    if (isCp) {
+      breadcrumbs.push({ label: 'Control Panel', href: '/cp' })
+    } else {
+      breadcrumbs.push({ label: 'Dashboard', href: '/dashboard' })
+    }
 
     // Check if we're on the projects list page (no projectId in path)
     const isProjectsListPage = pathname === '/dashboard/settings/projects'
@@ -56,12 +61,12 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       const isLast = i === parts.length - 1
       const nextPart = parts[i + 1]
 
-      // Skip 'dashboard' as we already added it
-      if (part === 'dashboard') continue
+      // Skip first segment (dashboard or cp) as we already added it
+      if ((part === 'dashboard' && !isCp) || (part === 'cp' && isCp)) continue
 
       // Handle 'settings'
       if (part === 'settings') {
-        breadcrumbs.push({ label: 'Settings', href: '/dashboard/settings' })
+        breadcrumbs.push({ label: 'Settings', href: isCp ? '/cp/settings' : '/dashboard/settings' })
         continue
       }
 
@@ -132,7 +137,7 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
       // Handle special segments that need better labels
       if (part === 'data-model') {
         breadcrumbs.push({ 
-          label: 'Data Model', 
+          label: 'Content Model', 
           href: '/' + parts.slice(0, i + 1).join('/')
         })
         continue
@@ -140,25 +145,33 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
 
       if (part === 'data-model-manager') {
         breadcrumbs.push({ 
-          label: 'Data Model Manager', 
+          label: 'Content Model Manager', 
           href: '/' + parts.slice(0, i + 1).join('/')
         })
         continue
       }
 
-      // Handle other segments (like 'flows', etc.)
-      // Skip the last segment as it's shown as the page title
-      if (isLast) {
-        // Don't add the last segment to breadcrumb - it's shown as page title
+      if (part === 'components') {
+        breadcrumbs.push({ 
+          label: 'Components', 
+          href: '/' + parts.slice(0, i + 1).join('/')
+        })
         continue
       }
 
+      if (part === 'component-models') {
+        breadcrumbs.push({ 
+          label: 'Component Models', 
+          href: '/' + parts.slice(0, i + 1).join('/')
+        })
+        continue
+      }
+
+      // Build label and href for this segment (including last segment so current page appears in breadcrumb)
       const segmentLabel = part
         .split('-')
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ')
-
-      // Build href up to this point
       const href = '/' + parts.slice(0, i + 1).join('/')
 
       breadcrumbs.push({ 
@@ -176,10 +189,12 @@ export function Breadcrumb({ items, className }: BreadcrumbProps) {
     return null
   }
 
+  const homeHref = pathname?.startsWith('/cp') ? '/cp' : '/dashboard'
+
   return (
     <nav aria-label="Breadcrumb" className={cn('flex items-center gap-1.5', className)}>
       <Link
-        href="/dashboard"
+        href={homeHref}
         className="flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 py-0.5 hover:bg-muted/50"
       >
         <Home className="h-3.5 w-3.5" />

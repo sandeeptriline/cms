@@ -10,6 +10,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   Settings,
   Database,
   Save,
@@ -24,6 +33,7 @@ import {
   HardDrive,
   Zap,
   Users,
+  RefreshCw,
 } from 'lucide-react'
 import { Tenant } from '@/lib/api/tenants'
 import { tenantsApi, UpdateTenantDto } from '@/lib/api/tenants'
@@ -58,7 +68,10 @@ export function ConfigurationTab({ tenant, onRefresh }: ConfigurationTabProps) {
     advanced: false,
   })
   const [showConnectionString, setShowConnectionString] = useState(false)
+  const [showDbPassword, setShowDbPassword] = useState(false)
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [resettingDb, setResettingDb] = useState(false)
+  const [resetDbModalOpen, setResetDbModalOpen] = useState(false)
 
   const {
     register,
@@ -118,6 +131,27 @@ export function ConfigurationTab({ tenant, onRefresh }: ConfigurationTabProps) {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
+  const handleResetDbConfirm = async () => {
+    setResettingDb(true)
+    setError(null)
+    try {
+      await tenantsApi.resetTenantDb(tenant.id)
+      setResetDbModalOpen(false)
+      toast({
+        title: 'Database reset',
+        description: 'Tenant database has been reset to v2 structure.',
+      })
+      onRefresh()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      const msg = e.message || 'Failed to reset database'
+      setError(msg)
+      toast({ title: 'Error', description: msg, variant: 'destructive' })
+    } finally {
+      setResettingDb(false)
+    }
+  }
+
   const onSubmit = async (data: ConfigurationFormData) => {
     setIsSaving(true)
     setError(null)
@@ -169,6 +203,43 @@ export function ConfigurationTab({ tenant, onRefresh }: ConfigurationTabProps) {
 
   return (
     <div className="px-6 py-6 space-y-6">
+      <AlertDialog open={resetDbModalOpen} onOpenChange={setResetDbModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset database structure?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-left">
+                <p>
+                  Reset this tenant’s database to the Composable Content Graph v2 structure?
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                  <li>All tables will be dropped and recreated.</li>
+                  <li>All tenant data (users, content, roles, etc.) will be permanently lost.</li>
+                  <li>This cannot be undone.</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resettingDb}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleResetDbConfirm}
+              disabled={resettingDb}
+            >
+              {resettingDb ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                'OK'
+              )}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -448,6 +519,32 @@ export function ConfigurationTab({ tenant, onRefresh }: ConfigurationTabProps) {
           </CardHeader>
           {expandedSections.database && (
             <CardContent className="space-y-4">
+              {tenant.dbName && (
+                <div className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    If this tenant’s database has the wrong or missing structure, you can reset it to the Composable Content Graph v2 schema. All existing data will be lost.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setResetDbModalOpen(true)}
+                    disabled={resettingDb}
+                  >
+                    {resettingDb ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Resetting...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Reset DB structure
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               <div>
                 <Label>Database Name</Label>
                 <div className="flex items-center gap-2 mt-1">
@@ -466,6 +563,65 @@ export function ConfigurationTab({ tenant, onRefresh }: ConfigurationTabProps) {
                   </Button>
                 </div>
               </div>
+              {tenant.dbUser != null && tenant.dbUser !== '' && (
+                <div>
+                  <Label>Database User</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input value={tenant.dbUser} readOnly className="font-mono" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(tenant.dbUser ?? '', 'Database User')}
+                    >
+                      {copiedField === 'Database User' ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Dedicated MySQL user for this tenant database</p>
+                </div>
+              )}
+              {tenant.dbPassword != null && tenant.dbPassword !== '' && (
+                <div>
+                  <Label>Database Password</Label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type={showDbPassword ? 'text' : 'password'}
+                      value={tenant.dbPassword}
+                      readOnly
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowDbPassword(!showDbPassword)}
+                    >
+                      {showDbPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(tenant.dbPassword ?? '', 'Database Password')}
+                    >
+                      {copiedField === 'Database Password' ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Use these credentials to connect to the tenant database</p>
+                </div>
+              )}
               {tenant.dbHost && (
                 <div>
                   <Label>Database Host</Label>

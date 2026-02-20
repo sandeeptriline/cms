@@ -27,7 +27,7 @@ export interface ContentTypesResponse {
 export const contentApi = {
   /**
    * Get all content types for the current tenant
-   * TODO: Backend endpoint needs to be implemented at GET /api/v1/content-types
+   * TODO: Backend endpoint needs to be implemented at GET /api/content-types
    */
   async getAll(): Promise<ContentTypesResponse> {
     const response = await apiClient.get<ContentTypesResponse>('/content-types')
@@ -36,7 +36,7 @@ export const contentApi = {
 
   /**
    * Get a single content type by ID
-   * TODO: Backend endpoint needs to be implemented at GET /api/v1/content-types/:id
+   * TODO: Backend endpoint needs to be implemented at GET /api/content-types/:id
    */
   async getById(id: string): Promise<ContentType> {
     const response = await apiClient.get<ContentType>(`/content-types/${id}`)

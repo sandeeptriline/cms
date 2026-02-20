@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useAuth } from '@/contexts/auth-context'
+import { isSuperAdmin } from '@/lib/utils/roles'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -20,7 +21,8 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, user } = useAuth()
+  const isPlatformAdmin = isSuperAdmin(user?.roles)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -33,7 +35,9 @@ export default function LoginPage() {
   })
 
   if (isAuthenticated && typeof window !== 'undefined') {
-    router.push('/dashboard')
+    if (user?.tenantSlug) router.push(`/${user.tenantSlug}/projects`)
+    else if (!isSuperAdmin(user?.roles)) router.push('/dashboard/projects')
+    else router.push('/cp')
     return null
   }
 
@@ -42,8 +46,8 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      await login(data.email, data.password)
-      router.push('/dashboard')
+      const { tenantSlug } = await login(data.email, data.password)
+      router.push(tenantSlug ? `/${tenantSlug}/projects` : '/cp')
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Login failed. Please try again.')
     } finally {

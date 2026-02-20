@@ -124,7 +124,7 @@ export function CreateProjectModal({
         <DialogHeader>
           <DialogTitle>Create Project</DialogTitle>
           <DialogDescription>
-            Create a new project to organize your data models, content, and settings.
+            Create a new project to organize your content models, content, and settings.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)}>

@@ -1,0 +1,12 @@
+-- Add sort_order to fields table (v2 tenant DB) for field ordering in the UI.
+-- Run this on tenant DBs that were created before sort_order was added to tenant-db-init-v2.sql.
+--
+-- Steps:
+-- 1. Find your tenant's DB name: SELECT db_name FROM tenants WHERE id = 'b5db0b35-091c-4d73-9a8c-126b80811431';
+-- 2. Connect to MySQL and run:
+--    USE <tenant_db_name>;
+--    SOURCE /path/to/tenant-db-add-field-sort-order-v2.sql;
+--    (or paste the ALTER below)
+--
+-- Run once per tenant DB. Fails if sort_order already exists (safe to ignore in that case).
+ALTER TABLE fields ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER config;

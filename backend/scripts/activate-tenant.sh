@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 echo "=========================================="
 echo "  Tenant Activation Helper"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 TENANT_SLUG="test-tenant-$(date +%s)"
 
 echo "=========================================="

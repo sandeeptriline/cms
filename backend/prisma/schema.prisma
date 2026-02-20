@@ -96,16 +96,33 @@ model tenant_usage {
   @@index([tenant_id], map: "idx_tenant_usage_tenant")
 }
 
+// Enterprise: shard routing (optional; used with enterprise-core-db-setup)
+model shards {
+  id           String    @id @db.Char(36)
+  name         String    @unique @db.VarChar(100)
+  db_host      String    @db.VarChar(255)
+  db_cluster   String?   @db.VarChar(100)
+  status       String?   @db.VarChar(20)
+  tenant_count Int?      @default(0)
+  created_at   DateTime? @db.Timestamp(0)
+  tenants      tenants[]
+  @@map("shards")
+}
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model tenants {
   id                    String                  @id @db.Char(36)
   parent_id             String?                 @db.Char(36)
+  shard_id              String?                 @db.Char(36)
   name                  String                  @db.VarChar(255)
   slug                  String                  @unique(map: "slug") @db.VarChar(100)
   db_name               String                  @unique(map: "db_name") @db.VarChar(100)
+  db_user               String?                 @db.VarChar(64)
+  db_password           String?                 @db.VarChar(255)
   db_host               String?                 @db.VarChar(255)
   db_connection         String?                 @db.VarChar(500)
   status                tenants_status          @default(provisioning)
+  plan_id               String?                 @db.Char(36)
   config                Json?
   feature_flags         Json?
   usage_limits          Json?
@@ -119,14 +136,17 @@ model tenants {
   provisioned_at        DateTime?               @db.Timestamp(0)
   created_at            DateTime                @default(now()) @db.Timestamp(0)
   updated_at            DateTime                @default(now()) @db.Timestamp(0)
+  shards                shards?                 @relation(fields: [shard_id], references: [id])
   platform_search_index platform_search_index[]
   tenant_usage          tenant_usage[]
+  tenant_users          tenant_users[]
   tenants               tenants?                @relation("tenantsTotenants", fields: [parent_id], references: [id], onUpdate: NoAction, map: "fk_tenants_parent")
   other_tenants         tenants[]               @relation("tenantsTotenants")
 
   @@index([last_activity_at], map: "idx_tenants_activity")
   @@index([parent_id], map: "idx_tenants_parent")
   @@index([status], map: "idx_tenants_status")
+  @@index([shard_id], map: "idx_tenants_shard")
 }
 
 model theme_library_bundles {
@@ -211,7 +231,7 @@ enum tenants_status {
   deleted
 }
 
-// Platform Users (Super Admin only)
+// Platform Users (Super Admin / Control Plane)
 model users {
   id                   String      @id @db.Char(36)
   email                String      @unique @db.VarChar(255)
@@ -233,12 +253,57 @@ model users {
   updated_at           DateTime    @default(now()) @updatedAt @db.Timestamp(0)
   
   user_roles           user_roles[]
+  platform_user_roles  platform_user_roles[]
+  tenant_users         tenant_users[]
   
   @@index([email], map: "idx_users_email")
   @@index([status], map: "idx_users_status")
   @@index([provider], map: "idx_users_provider")
   @@index([email_verified_at], map: "idx_users_email_verified")
   @@map("users")
+}
+
+// Enterprise: platform RBAC roles (Super Admin, finance_admin, etc.)
+model platform_roles {
+  id                    String                 @id @db.Char(36)
+  name                  String                 @db.VarChar(100)
+  description           String?                 @db.VarChar(255)
+  is_system             Boolean                @default(true)
+  created_at            DateTime               @default(now()) @db.Timestamp(0)
+  platform_user_roles  platform_user_roles[]
+  @@unique([name], map: "uk_platform_role_name")
+  @@map("platform_roles")
+}
+
+// Enterprise: user <-> platform role assignment
+model platform_user_roles {
+  user_id    String        @db.Char(36)
+  role_id    String        @db.Char(36)
+  assigned_at DateTime?   @default(now()) @db.Timestamp(0)
+  user       users        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role       platform_roles @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  @@id([user_id, role_id])
+  @@map("platform_user_roles")
+}
+
+// Tenant membership: which platform users have access to which tenant
+model tenant_users {
+  id         String            @id @db.Char(36)
+  tenant_id  String             @db.Char(36)
+  user_id    String             @db.Char(36)
+  status     tenant_user_status @default(invited)
+  created_at DateTime?          @default(now()) @db.Timestamp(0)
+  tenants    tenants            @relation(fields: [tenant_id], references: [id], onDelete: Cascade, map: "fk_tenant_users_tenant")
+  user       users              @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "fk_tenant_users_user")
+  @@unique([tenant_id, user_id], map: "uk_tenant_user")
+  @@index([user_id], map: "idx_tenant_users_user")
+  @@map("tenant_users")
+}
+
+enum tenant_user_status {
+  invited
+  active
+  removed
 }
 
 // Platform Roles (Super Admin role)

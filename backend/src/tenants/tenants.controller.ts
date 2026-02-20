@@ -303,6 +303,35 @@ export class TenantsController {
     return this.tenantsService.suspend(id);
   }
 
+  @Post(':id/reset-db')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reset tenant database structure',
+    description:
+      'Drops all tables in the tenant database and recreates them from the Composable Content Graph v2 schema. All tenant data is permanently lost. Use when the tenant DB has wrong or missing structure.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Tenant UUID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Tenant database reset successfully',
+    schema: { type: 'object', properties: { message: { type: 'string' } } },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Tenant not found or has no database',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Tenant not found',
+  })
+  async resetTenantDb(@Param('id') id: string) {
+    return this.tenantsService.resetTenantDb(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({

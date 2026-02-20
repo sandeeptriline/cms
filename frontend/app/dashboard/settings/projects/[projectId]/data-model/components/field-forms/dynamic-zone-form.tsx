@@ -101,7 +101,7 @@ export function DynamicZoneForm({
                                 {schemaSearch 
                                     ? `No schemas found matching "${schemaSearch}"`
                                     : currentDataModelId
-                                        ? 'No other schemas available (current data model excluded)'
+                                        ? 'No other schemas available (current content model excluded)'
                                         : 'No schemas available'}
                             </p>
                         ) : (

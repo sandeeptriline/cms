@@ -2,7 +2,7 @@
 
 # Script to check if tenant database has tables
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <tenant-id>"

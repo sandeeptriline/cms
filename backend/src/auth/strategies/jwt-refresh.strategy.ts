@@ -28,12 +28,11 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
       throw new UnauthorizedException('Invalid refresh token payload');
     }
 
-    // tenantId can be null for Super Admin
-    // For tenant users, tenantId must be present
     if (payload.tenantId === null || payload.tenantId === undefined) {
-      // Only allow null tenantId for Super Admin
-      // Note: This strategy is not typically used for refresh, but validate anyway
-      if (!payload.roles || !payload.roles.includes('Super Admin')) {
+      const isSuperAdmin = payload.roles?.some((r: string) =>
+        ['Super Admin', 'super_admin'].includes(r),
+      );
+      if (!isSuperAdmin) {
         throw new UnauthorizedException('Invalid refresh token payload: tenantId required for non-Super Admin users');
       }
     }

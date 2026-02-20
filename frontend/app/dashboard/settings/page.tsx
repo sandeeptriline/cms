@@ -57,10 +57,11 @@ export default function SettingsPage() {
   }
 
   const settingsSections = [
-    {
+        {
       title: 'Settings',
       items: [
-        { name: 'Data Model', path: getProjectPath('/data-model'), icon: Database, description: 'Manage content schemas and field definitions' },
+        { name: 'Content Model', path: getProjectPath('/data-model'), icon: Database, description: 'Manage content schemas and field definitions' },
+        { name: 'Components', path: getProjectPath('/components'), icon: Puzzle, description: 'Reusable blocks of fields for content models' },
         { name: 'Flows', path: getProjectPath('/flows'), icon: GitBranch, description: 'Configure approval workflows and automation' },
         { name: 'User Roles', path: '/dashboard/roles', icon: Shield, description: 'Manage roles and role assignments' },
         { name: 'Access Policies', path: getProjectPath('/access-policies'), icon: Lock, description: 'Fine-grained permission management' },

@@ -3,7 +3,7 @@
 # Quick fix script for missing tenant database
 # This will create the database and grant privileges automatically
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 if [ -z "$1" ]; then
   echo "Usage: $0 <tenant-id>"

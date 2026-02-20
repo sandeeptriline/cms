@@ -19,8 +19,10 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import {
   AuthResponseDto,
@@ -35,15 +37,60 @@ import { TenantGuard } from '../tenants/guards/tenant.guard';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Public()
-  @UseGuards(TenantGuard) // Require tenant context
+  @Post('register-tenant')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Sign up as a new tenant (self-registration)',
+    description:
+      'Creates a new organization (tenant) with Free plan, a platform user, and an admin user in the tenant. No auth or tenant header required. Returns JWT for tenant portal login.',
+  })
+  @ApiBody({
+    type: RegisterTenantDto,
+    description: 'Tenant and admin details',
+    examples: {
+      signup: {
+        summary: 'Tenant signup',
+        value: {
+          name: 'Acme Corp',
+          slug: 'acme-corp',
+          email: 'admin@acme.com',
+          password: 'SecurePassword123!',
+          adminName: 'Jane Doe',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Tenant created and logged in',
+    type: AuthResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Slug taken or email already exists',
+  })
+  async registerTenant(
+    @Body() registerTenantDto: RegisterTenantDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.registerTenant(registerTenantDto);
+    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @UseGuards(TenantGuard)
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Register a new user',
-    description: 'Creates a new user account in the specified tenant. Returns JWT tokens for immediate authentication.',
+    summary: 'Register a new user (within a tenant)',
+    description: 'Creates a new user account in the specified tenant. Requires X-Tenant-ID or X-Tenant-Slug. Returns JWT tokens.',
   })
   @ApiBody({
     type: RegisterDto,
@@ -377,10 +424,19 @@ export class AuthController {
     },
   })
   async getMe(@CurrentUser() user: CurrentUserPayload) {
+    let tenantSlug = user.tenantSlug ?? null;
+    if (user.tenantId && !tenantSlug) {
+      const tenant = await this.prisma.tenants.findUnique({
+        where: { id: user.tenantId },
+        select: { slug: true },
+      });
+      tenantSlug = tenant?.slug ?? null;
+    }
     return {
       id: user.userId,
       email: user.email,
       tenantId: user.tenantId,
+      tenantSlug,
       roles: user.roles,
     };
   }

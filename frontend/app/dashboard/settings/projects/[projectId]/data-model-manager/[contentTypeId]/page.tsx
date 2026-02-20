@@ -120,7 +120,7 @@ export default function ContentTypeEntriesPage() {
   const sidebarItems: SecondarySidebarItem[] = [
     {
       id: 'data-model-manager-label',
-      name: 'Data Model Manager',
+      name: 'Content Model Manager',
       isLabel: true,
     },
     ...(allContentTypes.length > 0
@@ -193,7 +193,7 @@ export default function ContentTypeEntriesPage() {
     <ProjectRouteGuard>
       <DashboardLayout
         basePath="/dashboard"
-        title={contentType?.name || 'Data Model Manager'}
+        title={contentType?.name || 'Content Model Manager'}
         icon={<FileText className="h-5 w-5" />}
         secondarySidebarItems={sidebarItems}
         onSidebarItemClick={handleSidebarItemClick}
@@ -257,7 +257,7 @@ export default function ContentTypeEntriesPage() {
                         className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2"
                       >
                         <ArrowLeft className="h-4 w-4" />
-                        Back to Data Model Manager
+                        Back to Content Model Manager
                       </Link>
                       <h1 className="text-2xl font-semibold">{contentType?.name}</h1>
                     </div>

@@ -2,11 +2,6 @@ import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsNumber, IsObject, MaxLen
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateFormElementDto {
-  @ApiPropertyOptional({ description: 'Project ID (NULL for system elements available to all projects)', example: null })
-  @IsString()
-  @IsOptional()
-  project_id?: string | null;
-
   @ApiProperty({ description: 'Display name', example: 'Text' })
   @IsString()
   @IsNotEmpty()

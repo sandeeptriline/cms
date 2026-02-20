@@ -7,7 +7,7 @@
 # Usage: ./get-access-token.sh
 # =============================================================================
 
-API_URL="http://localhost:3001/api/v1/auth/platform-admin/login"
+API_URL="http://localhost:3001/api/auth/platform-admin/login"
 EMAIL="admin@example.com"
 PASSWORD="admin@123"
 
@@ -41,7 +41,7 @@ if echo "$RESPONSE" | grep -q "accessToken"; then
   echo "export TOKEN=\"$ACCESS_TOKEN\""
   echo ""
   echo "💡 Then test with:"
-  echo "curl -X GET http://localhost:3001/api/v1/auth/me -H \"Authorization: Bearer \$TOKEN\""
+  echo "curl -X GET http://localhost:3001/api/auth/me -H \"Authorization: Bearer \$TOKEN\""
   echo ""
   
   # Save to file

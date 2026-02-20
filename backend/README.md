@@ -57,5 +57,5 @@ Quick links:
 
 ## API Endpoints
 
-- Base URL: `http://localhost:3001/api/v1`
+- Base URL: `http://localhost:3001/api`
 - API Docs: `http://localhost:3001/api/docs` (when Swagger is configured)

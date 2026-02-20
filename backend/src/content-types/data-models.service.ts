@@ -48,72 +48,81 @@ export class DataModelsService {
 
       const projectIdToUse = projectId;
 
-      // Get data models with fields
-      const contentTypes = await client.$queryRawUnsafe<Array<{
-        id: string;
-        project_id: string;
-        name: string;
-        collection: string;
-        icon: string | null;
-        is_system: number;
-        singleton: number;
-        note: string | null;
-        hidden: number;
-        created_at: Date;
-        updated_at: Date;
-      }>>(
-        `SELECT 
-          id, project_id, name, collection, icon, is_system, 
-          singleton, note, hidden, created_at, updated_at
-        FROM content_types 
-        WHERE project_id = ?
-        ORDER BY name ASC`,
-        projectIdToUse
-      );
+      try {
+        // Get data models with fields (v1 schema: content_types + fields with content_type_id)
+        const contentTypes = await client.$queryRawUnsafe<Array<{
+          id: string;
+          project_id: string;
+          name: string;
+          collection: string;
+          icon: string | null;
+          is_system: number;
+          singleton: number;
+          note: string | null;
+          hidden: number;
+          created_at: Date;
+          updated_at: Date;
+        }>>(
+          `SELECT 
+            id, project_id, name, collection, icon, is_system, 
+            singleton, note, hidden, created_at, updated_at
+          FROM content_types 
+          WHERE project_id = ?
+          ORDER BY name ASC`,
+          projectIdToUse
+        );
 
-      // Get fields for each content type
-      const contentTypesWithFields = await Promise.all(
-        contentTypes.map(async (ct) => {
-          const fields = await client.$queryRawUnsafe<Array<{
-            id: string;
-            field: string;
-            type: string;
-            interface: string | null;
-            options: any;
-            validation: any;
-            required: number;
-            hidden: number;
-            readonly: number;
-            sort: number | null;
-            note: string | null;
-            created_at: Date;
-            updated_at: Date;
-          }>>(
-            `SELECT 
-              id, field, type, interface, options, validation,
-              required, hidden, readonly, sort, note, created_at, updated_at
-            FROM fields 
-            WHERE content_type_id = ?
-            ORDER BY sort ASC, field ASC`,
-            ct.id
-          );
+        // Get fields for each content type
+        const contentTypesWithFields = await Promise.all(
+          contentTypes.map(async (ct) => {
+            const fields = await client.$queryRawUnsafe<Array<{
+              id: string;
+              field: string;
+              type: string;
+              interface: string | null;
+              options: any;
+              validation: any;
+              required: number;
+              hidden: number;
+              readonly: number;
+              sort: number | null;
+              note: string | null;
+              created_at: Date;
+              updated_at: Date;
+            }>>(
+              `SELECT 
+                id, field, type, interface, options, validation,
+                required, hidden, readonly, sort, note, created_at, updated_at
+              FROM fields 
+              WHERE content_type_id = ?
+              ORDER BY sort ASC, field ASC`,
+              ct.id
+            );
 
-          return {
-            ...ct,
-            is_system: ct.is_system === 1,
-            singleton: ct.singleton === 1,
-            hidden: ct.hidden === 1,
-            fields: fields.map(f => ({
-              ...f,
-              required: f.required === 1,
-              hidden: f.hidden === 1,
-              readonly: f.readonly === 1,
-            })),
-          };
-        })
-      );
+            return {
+              ...ct,
+              is_system: ct.is_system === 1,
+              singleton: ct.singleton === 1,
+              hidden: ct.hidden === 1,
+              fields: fields.map(f => ({
+                ...f,
+                required: f.required === 1,
+                hidden: f.hidden === 1,
+                readonly: f.readonly === 1,
+              })),
+            };
+          })
+        );
 
-      return contentTypesWithFields;
+        return contentTypesWithFields;
+      } catch (err: any) {
+        // v2-only tenant DBs have collections, not content_types
+        if (err?.code === 1146 || err?.message?.includes("doesn't exist")) {
+          this.logger.warn(`content_types table not found in tenant DB (v2-only?); returning empty list`);
+          return [];
+        }
+        throw err;
+      }
     });
   }
 

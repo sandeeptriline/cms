@@ -11,6 +11,8 @@ import {
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+import { CreateProjectDomainDto } from './dto/create-project-domain.dto';
+import { UpdateProjectDomainDto } from './dto/update-project-domain.dto';
 import { TenantGuard } from '../tenants/guards/tenant.guard';
 import { TenantId } from '../tenants/decorators/tenant.decorator';
 
@@ -35,6 +37,51 @@ export class ProjectsController {
   @Get(':id/affected-counts')
   getAffectedCounts(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.projectsService.getAffectedRecordCounts(tenantId, id);
+  }
+
+  /**
+   * GET /projects/:id/domains - Get all domains for a project
+   */
+  @Get(':id/domains')
+  findProjectDomains(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.projectsService.findProjectDomains(tenantId, id);
+  }
+
+  /**
+   * POST /projects/:id/domains - Create a project domain
+   */
+  @Post(':id/domains')
+  createProjectDomain(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Body() createDto: CreateProjectDomainDto,
+  ) {
+    return this.projectsService.createProjectDomain(tenantId, id, createDto);
+  }
+
+  /**
+   * PATCH /projects/:id/domains/:domainId - Update a project domain
+   */
+  @Patch(':id/domains/:domainId')
+  updateProjectDomain(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Param('domainId') domainId: string,
+    @Body() updateDto: UpdateProjectDomainDto,
+  ) {
+    return this.projectsService.updateProjectDomain(tenantId, id, domainId, updateDto);
+  }
+
+  /**
+   * DELETE /projects/:id/domains/:domainId - Delete a project domain
+   */
+  @Delete(':id/domains/:domainId')
+  removeProjectDomain(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @Param('domainId') domainId: string,
+  ) {
+    return this.projectsService.removeProjectDomain(tenantId, id, domainId);
   }
 
   /**

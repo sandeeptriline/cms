@@ -3,7 +3,7 @@
 # Script to fix tenant database permissions and create database if needed
 # This must be run as MySQL root user
 
-API_URL="http://localhost:3001/api/v1"
+API_URL="http://localhost:3001/api"
 
 echo "=========================================="
 echo "  Fix Tenant Database Permissions"

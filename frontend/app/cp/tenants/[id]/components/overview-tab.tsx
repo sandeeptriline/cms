@@ -249,11 +249,11 @@ export function OverviewTab({ tenant, onRefresh }: OverviewTabProps) {
       <Card>
         <CardHeader>
           <CardTitle>Database Information</CardTitle>
-          <CardDescription>Tenant database details</CardDescription>
+          <CardDescription>Tenant database connection details</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex items-center gap-2">
-            <Database className="h-4 w-4 text-muted-foreground" />
+            <Database className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-mono">{tenant.dbName}</span>
             <Button
               variant="ghost"
@@ -268,6 +268,43 @@ export function OverviewTab({ tenant, onRefresh }: OverviewTabProps) {
               )}
             </Button>
           </div>
+          {tenant.dbUser != null && tenant.dbUser !== '' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-20">User</span>
+              <span className="text-sm font-mono">{tenant.dbUser}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-auto"
+                onClick={() => copyToClipboard(tenant.dbUser ?? '', 'Database User')}
+              >
+                {copiedField === 'Database User' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </div>
+          )}
+          {tenant.dbPassword != null && tenant.dbPassword !== '' && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-20">Password</span>
+              <span className="text-sm font-mono">••••••••</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-auto"
+                onClick={() => copyToClipboard(tenant.dbPassword ?? '', 'Database Password')}
+              >
+                {copiedField === 'Database Password' ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <span className="text-xs text-muted-foreground">View/copy in Configuration tab</span>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -9,9 +9,17 @@ interface AuthContextType {
   loading: boolean
   isAuthenticated: boolean
   tenantId: string | null
-  login: (email: string, password: string, tenantId?: string) => Promise<void>
+  tenantSlug: string | null
+  login: (email: string, password: string, tenantId?: string) => Promise<{ tenantSlug: string | null }>
   platformAdminLogin: (email: string, password: string) => Promise<void>
-  register: (email: string, password: string, name: string, tenantId: string) => Promise<void>
+  register: (email: string, password: string, name: string, tenantId: string) => Promise<{ tenantSlug: string | null }>
+  registerTenant: (data: {
+    name: string
+    slug: string
+    email: string
+    password: string
+    adminName?: string
+  }) => Promise<{ tenantSlug: string | null }>
   logout: () => Promise<void>
   refreshAuth: () => Promise<void>
 }
@@ -23,12 +31,13 @@ const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
 
 // Helper to convert API response user to User type
-function mapAuthResponseToUser(authUser: any, tenantId: string | null): User {
+function mapAuthResponseToUser(authUser: any, tenantId: string | null, tenantSlug?: string | null): User {
   return {
     id: authUser.id,
     email: authUser.email,
     name: authUser.name,
-    tenantId: tenantId, // Can be null for Super Admin
+    tenantId: tenantId,
+    tenantSlug: tenantSlug ?? authUser.tenantSlug ?? null,
     roles: authUser.roles,
   }
 }
@@ -87,13 +96,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Set user (map API response to User type)
-        setUser(mapAuthResponseToUser(response.user, userTenantId))
+        setUser(mapAuthResponseToUser(response.user, userTenantId, response.user.tenantSlug))
 
         toast({
           title: 'Success',
           description: 'Logged in successfully',
           variant: 'success',
         })
+        return { tenantSlug: response.user.tenantSlug ?? null }
       } catch (error: any) {
         const message = error?.response?.data?.message || 'Login failed'
         toast({
@@ -118,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Don't store tenant_id for Super Admin (it's null)
 
         // Set user (tenantId is null for Super Admin)
-        setUser(mapAuthResponseToUser(response.user, null))
+        setUser(mapAuthResponseToUser(response.user, null, null))
 
         toast({
           title: 'Success',
@@ -143,21 +153,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const response: AuthResponse = await authApi.register({ email, password, name }, tenantId)
         
-        // Store tokens and tenant ID
         localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
         localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
         localStorage.setItem(TENANT_ID_KEY, tenantId)
-
-        // Set user (map API response to User type)
-        setUser(mapAuthResponseToUser(response.user, tenantId))
+        setUser(mapAuthResponseToUser(response.user, tenantId, response.user.tenantSlug))
 
         toast({
           title: 'Success',
           description: 'Account created successfully',
           variant: 'success',
         })
+        return { tenantSlug: response.user.tenantSlug ?? null }
       } catch (error: any) {
         const message = error?.response?.data?.message || 'Registration failed'
+        toast({
+          title: 'Error',
+          description: message,
+          variant: 'destructive',
+        })
+        throw error
+      }
+    },
+    [toast]
+  )
+
+  const registerTenant = useCallback(
+    async (data: { name: string; slug: string; email: string; password: string; adminName?: string }) => {
+      try {
+        const response: AuthResponse = await authApi.registerTenant(data)
+        const userTenantId = response.user.tenantId ?? null
+
+        localStorage.setItem(ACCESS_TOKEN_KEY, response.accessToken)
+        localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
+        if (userTenantId) localStorage.setItem(TENANT_ID_KEY, userTenantId)
+        setUser(mapAuthResponseToUser(response.user, userTenantId, response.user.tenantSlug ?? data.slug))
+
+        toast({
+          title: 'Success',
+          description: 'Your organization has been created. Welcome!',
+          variant: 'success',
+        })
+        return { tenantSlug: response.user.tenantSlug ?? data.slug }
+      } catch (error: any) {
+        const message = error?.response?.data?.message || 'Sign up failed'
         toast({
           title: 'Error',
           description: message,
@@ -217,7 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem(TENANT_ID_KEY)
       }
       
-      setUser(mapAuthResponseToUser(response.user, userTenantId))
+      setUser(mapAuthResponseToUser(response.user, userTenantId, response.user.tenantSlug))
     } catch (error) {
       // Refresh failed, logout
       localStorage.removeItem(ACCESS_TOKEN_KEY)
@@ -227,17 +265,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Get tenantId from user or localStorage
+  // Get tenantId / tenantSlug from user or localStorage
   const tenantId = user?.tenantId || (typeof window !== 'undefined' ? localStorage.getItem(TENANT_ID_KEY) : null)
+  const tenantSlug = user?.tenantSlug ?? null
 
   const value: AuthContextType = {
     user,
     loading,
     isAuthenticated: !!user,
     tenantId,
+    tenantSlug,
     login,
     platformAdminLogin,
     register,
+    registerTenant,
     logout,
     refreshAuth,
   }

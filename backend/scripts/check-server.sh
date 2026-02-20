@@ -27,7 +27,7 @@ echo ""
 
 # Test server connection
 echo "Testing server connection..."
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/v1/health 2>&1)
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/health 2>&1)
 
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "404" ]; then
     echo "✅ Server is responding (HTTP $HTTP_CODE)"

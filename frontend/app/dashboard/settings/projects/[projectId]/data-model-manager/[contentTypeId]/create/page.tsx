@@ -172,7 +172,7 @@ export default function CreateEntryPage() {
                 <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">Content type unavailable</h3>
                 <p className="text-sm text-muted-foreground">
-                  Please re-open the modal after selecting a content type in the Data Model section.
+                  Please re-open the modal after selecting a content type in the Content Model section.
                 </p>
               </div>
             )}

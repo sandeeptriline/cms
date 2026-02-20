@@ -10,15 +10,21 @@ import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterTenantDto } from './dto/register-tenant.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantPrismaService } from '../prisma/tenant-prisma.service';
 import { PlatformUsersService } from '../platform-users/platform-users.service';
+import { TenantsService } from '../tenants/tenants.service';
+import { TenantProvisioningService } from '../tenants/provisioning/tenant-provisioning.service';
+import { TenantUsersService } from '../tenant-users/tenant-users.service';
+import { TENANT_ADMIN_ROLE_ID } from '../constants/tenant-defaults';
 import { v4 as uuidv4 } from 'uuid';
 
 export interface TokenPayload {
   sub: string; // user id
   email: string;
   tenantId: string | null; // Can be null for Super Admin
+  tenantSlug?: string | null; // URL-friendly tenant slug for tenant users
   roles?: string[];
 }
 
@@ -31,6 +37,7 @@ export interface AuthResponse {
     name: string | null;
     roles?: string[];
     tenantId?: string | null; // Can be null for Super Admin
+    tenantSlug?: string | null; // URL-friendly tenant slug for tenant users
   };
 }
 
@@ -44,7 +51,24 @@ export class AuthService {
     private prisma: PrismaService,
     private tenantPrisma: TenantPrismaService,
     private platformUsersService: PlatformUsersService,
+    private tenantsService: TenantsService,
+    private provisioningService: TenantProvisioningService,
+    private tenantUsersService: TenantUsersService,
   ) {}
+
+  /** Resolve platform role names from platform_user_roles (enterprise) or user_roles (legacy) */
+  private getPlatformRoleNames(user: {
+    platform_user_roles?: { role: { name: string } }[];
+    user_roles?: { role: { name: string } }[];
+  }): string[] {
+    if (user.platform_user_roles?.length) {
+      return user.platform_user_roles.map((pur) => pur.role.name);
+    }
+    if (user.user_roles?.length) {
+      return user.user_roles.map((ur) => ur.role.name);
+    }
+    return [];
+  }
 
   /**
    * Register a new user
@@ -93,8 +117,65 @@ export class AuthService {
       );
     });
 
-    // Generate tokens
-    return this.generateTokens(userId, registerDto.email, tenantId);
+    // Generate tokens (tenant already loaded above)
+    return this.generateTokens(userId, registerDto.email, tenantId, [], registerDto.name ?? null, tenant.slug);
+  }
+
+  /**
+   * Self-signup: register as a new tenant (SaaS). Creates platform user, tenant with Free plan,
+   * tenant_users link, provisions tenant DB, and tenant user for login. Returns tokens for tenant portal.
+   */
+  async registerTenant(dto: RegisterTenantDto): Promise<AuthResponse> {
+    this.logger.debug(`Tenant signup: ${dto.slug} / ${dto.email}`);
+
+    const existingSlug = await this.prisma.tenants.findUnique({
+      where: { slug: dto.slug },
+    });
+    if (existingSlug) {
+      throw new BadRequestException(`Organization slug "${dto.slug}" is already taken`);
+    }
+
+    const platformUser = await this.platformUsersService.create({
+      email: dto.email,
+      password: dto.password,
+      name: dto.adminName ?? dto.name,
+    });
+
+    const tenant = await this.tenantsService.create(
+      {
+        name: dto.name,
+        slug: dto.slug,
+        adminUserId: platformUser.id,
+      },
+      { skipProvisioning: true, planId: TenantsService.FREE_PLAN_ID },
+    );
+
+    try {
+      await this.provisioningService.provisionTenant(tenant.id, tenant.db_name);
+    } catch (err: any) {
+      this.logger.error(`Provisioning failed for tenant ${tenant.id}: ${err?.message}`);
+      throw new BadRequestException(
+        'Tenant could not be provisioned. Please try again or contact support.',
+      );
+    }
+
+    const createdUser = await this.tenantUsersService.createTenantUser(tenant.id, {
+      email: dto.email,
+      password: dto.password,
+      name: dto.adminName ?? dto.name,
+      roleIds: [TENANT_ADMIN_ROLE_ID],
+    });
+
+    this.logger.log(`Tenant registered: ${dto.slug}, user ${createdUser.id}`);
+
+    return this.generateTokens(
+      createdUser.id,
+      dto.email,
+      tenant.id,
+      createdUser.roles ?? [],
+      createdUser.name ?? null,
+      dto.slug,
+    );
   }
 
   /**
@@ -114,14 +195,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Check if user has Super Admin role
-    if (!user.user_roles || user.user_roles.length === 0) {
+    const roles = this.getPlatformRoleNames(user);
+    if (!roles?.length) {
       this.logger.warn(`Platform Admin login failed: User ${user.id} has no roles assigned`);
       throw new UnauthorizedException('User is not a Super Admin');
     }
-
-    const roles = user.user_roles.map((ur) => ur.role.name);
-    if (!roles.includes('Super Admin')) {
+    const superAdminNames = ['Super Admin', 'super_admin'];
+    if (!roles.some((r) => superAdminNames.includes(r))) {
       this.logger.warn(
         `Platform Admin login failed: User ${user.id} does not have Super Admin role. Current roles: ${roles.join(', ')}`,
       );
@@ -272,7 +352,7 @@ export class AuthService {
     );
 
     // Generate tokens
-    return this.generateTokens(user.id, user.email, found.tenantId, roles, user.name);
+    return this.generateTokens(user.id, user.email, found.tenantId, roles, user.name, found.tenantSlug);
   }
 
   /**
@@ -350,7 +430,7 @@ export class AuthService {
     }
 
     // Generate tokens
-    return this.generateTokens(user.id, user.email, tenantId, roles, user.name);
+    return this.generateTokens(user.id, user.email, tenantId, roles, user.name, tenant.slug);
   }
 
   /**
@@ -369,11 +449,8 @@ export class AuthService {
         const user = await this.prisma.users.findUnique({
           where: { id: payload.sub },
           include: {
-            user_roles: {
-              include: {
-                role: true,
-              },
-            },
+            platform_user_roles: { include: { role: true } },
+            user_roles: { include: { role: true } },
           },
         });
 
@@ -381,7 +458,7 @@ export class AuthService {
           throw new UnauthorizedException('User not found or inactive');
         }
 
-        const roles = user.user_roles.map((ur) => ur.role.name);
+        const roles = this.getPlatformRoleNames(user);
         return this.generateTokens(user.id, user.email, null, roles, user.name);
       }
 
@@ -433,7 +510,7 @@ export class AuthService {
       }
 
       // Generate new tokens
-      return this.generateTokens(user.id, user.email, tenantId, roles, user.name);
+      return this.generateTokens(user.id, user.email, tenantId, roles, user.name, tenant.slug);
     } catch (error) {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -448,11 +525,13 @@ export class AuthService {
     tenantId: string | null, // Can be null for Super Admin
     roles: string[] = [],
     name: string | null = null,
+    tenantSlug: string | null = null, // URL-friendly tenant slug when tenant user
   ): Promise<AuthResponse> {
     const payload: TokenPayload = {
       sub: userId,
       email,
-      tenantId: tenantId || null, // Can be null for Super Admin
+      tenantId: tenantId || null,
+      tenantSlug: tenantSlug || null,
       roles,
     };
 
@@ -481,7 +560,8 @@ export class AuthService {
         email,
         name,
         roles,
-        tenantId: tenantId || null, // Include tenantId (null for Super Admin)
+        tenantId: tenantId || null,
+        tenantSlug: tenantSlug || null,
       },
     };
   }

@@ -35,7 +35,7 @@ export class FormElementsController {
   @RequirePermission('form_element:read')
   @ApiOperation({
     summary: 'Get all form elements',
-    description: 'Retrieve all form elements for the current tenant. System elements (project_id = NULL) are available to all projects. Requires form_element:read permission.',
+    description: 'Retrieve all active form elements from the platform registry (cms_platform.form_elements). Requires form_element:read permission.',
   })
   @ApiResponse({
     status: 200,
@@ -43,11 +43,8 @@ export class FormElementsController {
   })
   async getFormElements(
     @TenantId() tenantId: string,
-    @Query('projectId') projectId: string,
+    @Query('projectId') projectId?: string,
   ) {
-    if (!projectId) {
-      throw new BadRequestException('projectId query parameter is required');
-    }
     return this.formElementsService.getFormElements(tenantId, projectId);
   }
 

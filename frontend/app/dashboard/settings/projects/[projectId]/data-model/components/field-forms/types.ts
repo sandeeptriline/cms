@@ -28,6 +28,8 @@ export const fieldConfigurationSchema = z.object({
   schemaIcon: z.string().optional(),
   schemaId: z.string().optional(),
   schemaRepeatable: z.boolean().default(false),
+  // Component-specific (v2 reusable block)
+  componentId: z.string().optional(),
   // Dynamic Zone specific
   allowedSchemas: z.array(z.string()).optional(),
 })

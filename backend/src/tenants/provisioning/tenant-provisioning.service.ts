@@ -3,6 +3,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { tenants_status } from '@prisma/client';
 import { DatabaseValidator } from '../../common/utils/database-validator';
+import { TENANT_ADMIN_ROLE_ID } from '../../constants/tenant-defaults';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -30,12 +31,15 @@ export class TenantProvisioningService {
       );
     }
 
+    let tenantDbUser: string | null = null;
+    let tenantDbPassword: string | null = null;
+
     try {
       // Step 1: Create the database
       await this.createDatabase(dbName);
       this.logger.log(`Database ${dbName} created successfully`);
 
-      // Step 2: Grant privileges to the database user
+      // Step 2: Grant privileges to the app database user (so migrations can run)
       await this.grantPrivileges(dbName);
       this.logger.log(`Privileges granted for ${dbName}`);
 
@@ -47,10 +51,23 @@ export class TenantProvisioningService {
       await this.setupDefaultData(dbName, tenantId);
       this.logger.log(`Default data setup completed for ${dbName}`);
 
-      // Step 5: Update tenant status to ACTIVE
+      // Step 5: Create dedicated DB user for this tenant (for external access)
+      const creds = await this.createTenantDbUser(dbName);
+      if (creds) {
+        tenantDbUser = creds.dbUser;
+        tenantDbPassword = creds.dbPassword;
+        this.logger.log(`Tenant DB user ${tenantDbUser} created for ${dbName}`);
+      }
+
+      // Step 6: Update tenant status to ACTIVE and store DB credentials
       await this.prisma.tenants.update({
         where: { id: tenantId },
-        data: { status: tenants_status.active },
+        data: {
+          status: tenants_status.active,
+          provisioned_at: new Date(),
+          ...(tenantDbUser && { db_user: tenantDbUser }),
+          ...(tenantDbPassword && { db_password: tenantDbPassword }),
+        },
       });
 
       this.logger.log(`Tenant ${tenantId} provisioned successfully`);
@@ -133,6 +150,69 @@ export class TenantProvisioningService {
   }
 
   /**
+   * Create a dedicated MySQL user for the tenant database (for external access with these credentials).
+   * Requires MYSQL_ROOT_URL. Returns credentials or null if root not available / creation fails.
+   */
+  private async createTenantDbUser(dbName: string): Promise<{ dbUser: string; dbPassword: string } | null> {
+    const rootUrl = this.configService.get<string>('MYSQL_ROOT_URL', '');
+    if (!rootUrl) {
+      this.logger.warn('MYSQL_ROOT_URL not set; skipping tenant DB user creation');
+      return null;
+    }
+
+    const sanitizedDbName = this.sanitizeDatabaseName(dbName);
+    // MySQL user max 32 chars; use cms_t_ + suffix from db name (strip cms_tenant_)
+    const suffix = dbName.replace(/^cms_tenant_/i, '').replace(/[^a-z0-9_]/gi, '_').slice(0, 26);
+    const dbUser = `cms_t_${suffix}`.slice(0, 32);
+    const dbPassword = this.generateSecurePassword(24);
+
+    const dbHost = this.getDbHostFromUrl(rootUrl);
+
+    let rootPrisma: any = null;
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      rootPrisma = new PrismaClient({ datasources: { db: { url: rootUrl } } });
+      await rootPrisma.$connect();
+    } catch (error: any) {
+      this.logger.warn(`Failed to connect as root for tenant user creation: ${error.message}`);
+      return null;
+    }
+
+    const sanitizedUser = dbUser.replace(/[^a-z0-9_]/gi, '');
+    const sanitizedHost = dbHost.replace(/[^a-z0-9_.%-]/gi, '');
+    const escapedPassword = dbPassword.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    try {
+      await rootPrisma.$executeRawUnsafe(
+        `CREATE USER IF NOT EXISTS '${sanitizedUser}'@'${sanitizedHost}' IDENTIFIED BY '${escapedPassword}'`,
+      );
+      await rootPrisma.$executeRawUnsafe(
+        `GRANT ALL PRIVILEGES ON \`${sanitizedDbName}\`.* TO '${sanitizedUser}'@'${sanitizedHost}'`,
+      );
+      await rootPrisma.$executeRawUnsafe('FLUSH PRIVILEGES');
+      return { dbUser: sanitizedUser, dbPassword };
+    } catch (error: any) {
+      this.logger.error(`Failed to create tenant DB user: ${error.message}`);
+      return null;
+    } finally {
+      if (rootPrisma) await rootPrisma.$disconnect();
+    }
+  }
+
+  private getDbHostFromUrl(url: string): string {
+    const match = url.match(/@([^:]+):/);
+    return match ? match[1] : 'localhost';
+  }
+
+  private generateSecurePassword(length: number): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let result = '';
+    const randomBytes = require('crypto').randomBytes(length);
+    for (let i = 0; i < length; i++) result += chars[randomBytes[i] % chars.length];
+    return result;
+  }
+
+  /**
    * Grant privileges to the database user
    * Note: This requires MySQL root/admin privileges to grant privileges to other users
    */
@@ -200,19 +280,12 @@ export class TenantProvisioningService {
   }
 
   /**
-   * Run tenant database migrations
+   * Run tenant database migrations.
+   * Does not use USE (triggers MySQL 1295 in prepared statement protocol); table names are qualified with DB name.
    */
   private async runTenantMigrations(dbName: string): Promise<void> {
-    // For now, we'll create the basic tenant schema
-    // Later, this can use Prisma migrations or SQL files
     const sanitizedDbName = this.sanitizeDatabaseName(dbName);
-
     try {
-      // Switch to tenant database
-      await this.prisma.$executeRawUnsafe(`USE \`${sanitizedDbName}\``);
-
-      // Create basic tenant tables
-      // This will be replaced with proper Prisma migrations later
       await this.createTenantSchema(sanitizedDbName);
     } catch (error) {
       this.logger.error(`Failed to run migrations for ${dbName}: ${error.message}`);
@@ -221,61 +294,74 @@ export class TenantProvisioningService {
   }
 
   /**
-   * Create basic tenant database schema
-   * Reads and executes the tenant-db.sql schema file
+   * Create basic tenant database schema.
+   * Prefers Composable Content Graph v2 schema (tenant-db-init-v2.sql); falls back to tenant-db.sql.
    */
   private async createTenantSchema(dbName: string): Promise<void> {
     this.logger.log(`Creating schema for ${dbName}`);
-    
     const fs = require('fs');
     const path = require('path');
-    
-    // Path to tenant-db.sql file (relative to project root)
-    // Try multiple possible paths
-    const possiblePaths = [
-      path.join(process.cwd(), '..', 'docs', 'tenant-db.sql'), // From backend/
-      path.join(process.cwd(), 'docs', 'tenant-db.sql'), // From root/
-      path.join(__dirname, '..', '..', '..', '..', 'docs', 'tenant-db.sql'), // From backend/src/tenants/provisioning/
+
+    const v2InitPaths = [
+      path.join(process.cwd(), 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
+      path.join(process.cwd(), '..', 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
+      path.join(__dirname, '..', '..', '..', '..', 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
     ];
-    
+    const legacyPaths = [
+      path.join(process.cwd(), '..', 'docs', 'tenant-db.sql'),
+      path.join(process.cwd(), 'docs', 'tenant-db.sql'),
+      path.join(process.cwd(), 'docs', 'core', 'tenant-db.sql'),
+      path.join(__dirname, '..', '..', '..', '..', 'docs', 'tenant-db.sql'),
+    ];
     let schemaPath: string | null = null;
-    for (const possiblePath of possiblePaths) {
-      if (fs.existsSync(possiblePath)) {
-        schemaPath = possiblePath;
+    for (const p of v2InitPaths) {
+      if (fs.existsSync(p)) {
+        schemaPath = p;
+        this.logger.log(`Using v2 tenant schema: ${p}`);
         break;
       }
     }
-    
     if (!schemaPath) {
-      throw new Error(`Schema file not found. Tried: ${possiblePaths.join(', ')}`);
+      for (const p of legacyPaths) {
+        if (fs.existsSync(p)) {
+          schemaPath = p;
+          this.logger.log(`Using legacy tenant schema: ${p}`);
+          break;
+        }
+      }
+    }
+    if (!schemaPath) {
+      throw new Error(`Schema file not found. Tried v2: ${v2InitPaths.join(', ')}; legacy: ${legacyPaths.join(', ')}`);
     }
     
     try {
-      // Read the SQL file
       const sql = fs.readFileSync(schemaPath, 'utf8');
-      
-      // Switch to the tenant database first
-      await this.prisma.$executeRawUnsafe(`USE \`${this.sanitizeDatabaseName(dbName)}\``);
-      
-      // Split SQL by semicolons, but be careful with JSON and strings
-      // Simple approach: split by semicolon followed by newline or end of string
+      const sanitizedDbName = this.sanitizeDatabaseName(dbName);
+
+      // Qualify table names with database so we don't need USE (USE triggers MySQL 1295 in prepared statements).
+      const qualifyStatement = (stmt: string): string => {
+        const db = sanitizedDbName;
+        let out = stmt.replace(/CREATE TABLE IF NOT EXISTS\s+`?(\w+)`?/gi, `CREATE TABLE IF NOT EXISTS \`${db}\`.$1`);
+        out = out.replace(/\bREFERENCES\s+`?(\w+)`?\s*\(/gi, `REFERENCES \`${db}\`.$1 (`);
+        return out;
+      };
+
       const statements = sql
         .split(/;\s*\n/)
         .map((stmt: string) => stmt.trim())
         .filter((stmt: string) => {
-          // Filter out comments and empty statements
           const cleaned = stmt.replace(/--.*$/gm, '').trim();
           return cleaned.length > 0 && !cleaned.startsWith('--');
         });
-      
-      // Execute each statement
+
       let successCount = 0;
       let errorCount = 0;
-      
+
       for (const statement of statements) {
         if (statement.length > 0) {
           try {
-            await this.prisma.$executeRawUnsafe(statement);
+            const qualified = qualifyStatement(statement);
+            await this.prisma.$executeRawUnsafe(qualified);
             successCount++;
           } catch (error: any) {
             // Ignore "table already exists" and "duplicate key" errors
@@ -313,29 +399,54 @@ export class TenantProvisioningService {
    */
   private async setupDefaultData(dbName: string, tenantId: string): Promise<void> {
     const sanitizedDbName = this.sanitizeDatabaseName(dbName);
+    const q = (table: string) => `\`${sanitizedDbName}\`.\`${table}\``;
 
     try {
-      await this.prisma.$executeRawUnsafe(`USE \`${sanitizedDbName}\``);
-
-      // Create default project if none exists
-      const existingProjects = await this.prisma.$queryRawUnsafe<Array<{ id: string }>>(
-        `SELECT id FROM projects LIMIT 1`
-      );
+      // Don't use USE (MySQL 1295); qualify table names.
+      const existingProjects = (await this.prisma.$queryRawUnsafe(
+        `SELECT id FROM ${q('projects')} LIMIT 1`
+      )) as Array<{ id: string }>;
 
       if (existingProjects.length === 0) {
         const defaultProjectId = uuidv4();
-        await this.prisma.$executeRawUnsafe(
-          `INSERT INTO projects (id, name, slug, config, feature_flags, created_at, updated_at)
-           VALUES (?, ?, ?, '{}', '{}', NOW(), NOW())`,
-          defaultProjectId,
-          'Default Project',
-          'default'
-        );
-        this.logger.log(`Default project created for tenant ${tenantId}`);
+        try {
+          await this.prisma.$executeRawUnsafe(
+            `INSERT INTO ${q('projects')} (id, name, description, created_at, updated_at)
+             VALUES (?, ?, NULL, NOW(), NOW())`,
+            defaultProjectId,
+            'Default Project'
+          );
+          this.logger.log(`Default project created for tenant ${tenantId}`);
+        } catch (insertError: any) {
+          if (insertError.message?.includes('Unknown column')) {
+            await this.prisma.$executeRawUnsafe(
+              `INSERT INTO ${q('projects')} (id, name, slug, config, feature_flags, created_at, updated_at)
+               VALUES (?, ?, 'default', '{}', '{}', NOW(), NOW())`,
+              defaultProjectId,
+              'Default Project'
+            );
+            this.logger.log(`Default project created for tenant ${tenantId} (legacy schema)`);
+          } else {
+            throw insertError;
+          }
+        }
       }
 
-      // Insert default schema (e.g., "Page" content type)
-      // This is optional - can be done later via API
+      // Ensure "Tenant Admin" role exists (for self-signup and tenant admins)
+      const existingRole = (await this.prisma.$queryRawUnsafe(
+        `SELECT id FROM ${q('roles')} WHERE id = ? LIMIT 1`,
+        TENANT_ADMIN_ROLE_ID
+      )) as Array<{ id: string }>;
+      if (existingRole.length === 0) {
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO ${q('roles')} (id, project_id, name, description, created_at, updated_at)
+           VALUES (?, NULL, ?, ?, NOW(), NOW())`,
+          TENANT_ADMIN_ROLE_ID,
+          'Tenant Admin',
+          'Default admin role for the tenant'
+        );
+        this.logger.log(`Tenant Admin role created for tenant ${tenantId}`);
+      }
     } catch (error) {
       this.logger.warn(`Failed to setup default data: ${error.message}`);
       // Don't throw - default data is optional
@@ -348,6 +459,100 @@ export class TenantProvisioningService {
   private sanitizeDatabaseName(dbName: string): string {
     // Only allow alphanumeric, underscore, and hyphen
     return dbName.replace(/[^a-z0-9_-]/gi, '');
+  }
+
+  /**
+   * Reset tenant database to Composable Content Graph v2 structure.
+   * Drops all v2 tables then runs tenant-db-init-v2.sql. All tenant data is lost.
+   */
+  async resetTenantDbToV2(tenantId: string): Promise<void> {
+    const tenant = await this.prisma.tenants.findUnique({
+      where: { id: tenantId },
+      select: { id: true, name: true, db_name: true },
+    });
+    if (!tenant) {
+      throw new BadRequestException('Tenant not found');
+    }
+    const dbName = tenant.db_name;
+    if (!dbName) {
+      throw new BadRequestException('Tenant has no database name; cannot reset.');
+    }
+    const sanitizedDbName = this.sanitizeDatabaseName(dbName);
+    if (!DatabaseValidator.isValidCmsDatabase(sanitizedDbName)) {
+      throw new BadRequestException(`Invalid tenant database name: ${dbName}`);
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+
+    const resetPaths = [
+      path.join(process.cwd(), 'docs', 'sql-scripts', 'tenant-db-reset-v2.sql'),
+      path.join(process.cwd(), '..', 'docs', 'sql-scripts', 'tenant-db-reset-v2.sql'),
+      path.join(__dirname, '..', '..', '..', '..', 'docs', 'sql-scripts', 'tenant-db-reset-v2.sql'),
+    ];
+    const initPaths = [
+      path.join(process.cwd(), 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
+      path.join(process.cwd(), '..', 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
+      path.join(__dirname, '..', '..', '..', '..', 'docs', 'sql-scripts', 'tenant-db-init-v2.sql'),
+    ];
+    let resetPath: string | null = null;
+    let initPath: string | null = null;
+    for (const p of resetPaths) {
+      if (fs.existsSync(p)) {
+        resetPath = p;
+        break;
+      }
+    }
+    for (const p of initPaths) {
+      if (fs.existsSync(p)) {
+        initPath = p;
+        break;
+      }
+    }
+    if (!resetPath || !initPath) {
+      throw new InternalServerErrorException(
+        'Tenant DB v2 schema files not found (tenant-db-reset-v2.sql and tenant-db-init-v2.sql in docs/sql-scripts/).',
+      );
+    }
+
+    // Qualify table names with database so we don't need USE (USE triggers MySQL 1295 in prepared statements).
+    const qualifyStatement = (stmt: string): string => {
+      const db = sanitizedDbName;
+      // DROP TABLE IF EXISTS table_name -> DROP TABLE IF EXISTS `db`.table_name
+      let out = stmt.replace(/DROP TABLE IF EXISTS\s+`?(\w+)`?/gi, `DROP TABLE IF EXISTS \`${db}\`.$1`);
+      // CREATE TABLE IF NOT EXISTS table_name -> CREATE TABLE IF NOT EXISTS `db`.table_name
+      out = out.replace(/CREATE TABLE IF NOT EXISTS\s+`?(\w+)`?/gi, `CREATE TABLE IF NOT EXISTS \`${db}\`.$1`);
+      // REFERENCES table_name( -> REFERENCES `db`.table_name( so FKs point to tenant DB
+      out = out.replace(/\bREFERENCES\s+`?(\w+)`?\s*\(/gi, `REFERENCES \`${db}\`.$1 (`);
+      return out;
+    };
+
+    const runSqlFile = async (filePath: string, label: string) => {
+      const sql = fs.readFileSync(filePath, 'utf8');
+      const statements = sql
+        .split(/;\s*\n/)
+        .map((s: string) => s.trim())
+        .filter((s: string) => {
+          const cleaned = s.replace(/--.*$/gm, '').trim();
+          return cleaned.length > 0 && !cleaned.startsWith('--');
+        });
+      for (const statement of statements) {
+        if (statement.length > 0) {
+          const qualified = qualifyStatement(statement);
+          await this.prisma.$executeRawUnsafe(qualified);
+        }
+      }
+      this.logger.log(`Tenant ${tenantId} (${dbName}): ${label} completed`);
+    };
+
+    try {
+      await runSqlFile(resetPath, 'reset (drop tables)');
+      await runSqlFile(initPath, 'init (create tables)');
+      this.logger.log(`Tenant database reset to v2 structure: ${dbName}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to reset tenant DB ${dbName}: ${error.message}`, error.stack);
+      throw new InternalServerErrorException(`Failed to reset tenant database: ${error.message}`);
+    }
   }
 
   /**

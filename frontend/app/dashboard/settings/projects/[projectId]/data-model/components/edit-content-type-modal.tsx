@@ -29,6 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { contentTypesApi, ContentType, UpdateContentTypeDto } from '@/lib/api/content-types'
+import { collectionsApi, UpdateCollectionDto } from '@/lib/api/collections'
 import { useToast } from '@/lib/hooks/use-toast'
 
 const updateContentTypeSchema = z.object({
@@ -53,6 +54,7 @@ interface EditContentTypeModalProps {
   onSuccess: () => void
   onDelete?: () => void
   showDeleteButton?: boolean
+  useV2?: boolean
 }
 
 export function EditContentTypeModal({
@@ -62,6 +64,7 @@ export function EditContentTypeModal({
   onSuccess,
   onDelete,
   showDeleteButton = false,
+  useV2 = false,
 }: EditContentTypeModalProps) {
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
@@ -79,23 +82,24 @@ export function EditContentTypeModal({
     resolver: zodResolver(updateContentTypeSchema),
     defaultValues: {
       name: contentType.name,
-      collection: contentType.collection,
-      icon: contentType.icon || '',
-      singleton: contentType.singleton,
-      note: contentType.note || '',
-      hidden: contentType.hidden,
+      collection: (contentType as { collection?: string; slug?: string }).collection ?? (contentType as { slug?: string }).slug ?? '',
+      icon: (contentType as { icon?: string; config?: { icon?: string } }).icon ?? (contentType as { config?: { icon?: string } }).config?.icon ?? '',
+      singleton: (contentType as { singleton?: boolean; config?: { singleton?: boolean } }).singleton ?? (contentType as { config?: { singleton?: boolean } }).config?.singleton ?? false,
+      note: (contentType as { note?: string; config?: { note?: string } }).note ?? (contentType as { config?: { note?: string } }).config?.note ?? '',
+      hidden: (contentType as { hidden?: boolean; config?: { hidden?: boolean } }).hidden ?? (contentType as { config?: { hidden?: boolean } }).config?.hidden ?? false,
     },
   })
 
   useEffect(() => {
     if (open && contentType) {
+      const c = contentType as ContentType & { slug?: string; config?: { icon?: string; note?: string; singleton?: boolean; hidden?: boolean } }
       reset({
         name: contentType.name,
-        collection: contentType.collection,
-        icon: contentType.icon || '',
-        singleton: contentType.singleton,
-        note: contentType.note || '',
-        hidden: contentType.hidden,
+        collection: c.collection ?? c.slug ?? '',
+        icon: c.icon ?? c.config?.icon ?? '',
+        singleton: c.singleton ?? c.config?.singleton ?? false,
+        note: c.note ?? c.config?.note ?? '',
+        hidden: c.hidden ?? c.config?.hidden ?? false,
       })
     }
   }, [open, contentType, reset])
@@ -117,18 +121,32 @@ export function EditContentTypeModal({
   const onSubmit = async (data: UpdateContentTypeFormData) => {
     try {
       setSaving(true)
-      const updateDto: UpdateContentTypeDto = {
-        name: data.name,
-        collection: data.collection,
-        icon: data.icon || 'FileText', // Default to FileText if no icon selected
-        singleton: data.singleton,
-        note: data.note || undefined,
-        hidden: data.hidden,
+      if (useV2) {
+        const updateDto: UpdateCollectionDto = {
+          name: data.name,
+          slug: data.collection,
+          config: {
+            icon: data.icon || 'FileText',
+            note: data.note || undefined,
+            singleton: data.singleton,
+            hidden: data.hidden,
+          },
+        }
+        await collectionsApi.update(contentType.id, updateDto)
+      } else {
+        const updateDto: UpdateContentTypeDto = {
+          name: data.name,
+          collection: data.collection,
+          icon: data.icon || 'FileText',
+          singleton: data.singleton,
+          note: data.note || undefined,
+          hidden: data.hidden,
+        }
+        await contentTypesApi.update(contentType.id, updateDto)
       }
-      await contentTypesApi.update(contentType.id, updateDto)
       toast({
         title: 'Success',
-        description: 'Content type updated successfully',
+        description: useV2 ? 'Collection updated successfully' : 'Content type updated successfully',
       })
       onOpenChange(false)
       onSuccess()
@@ -157,10 +175,14 @@ export function EditContentTypeModal({
   const handleDeleteConfirm = async () => {
     try {
       setDeleting(true)
-      await contentTypesApi.delete(contentType.id)
+      if (useV2) {
+        await collectionsApi.delete(contentType.id)
+      } else {
+        await contentTypesApi.delete(contentType.id)
+      }
       toast({
         title: 'Success',
-        description: 'Data model deleted successfully',
+        description: 'Content model deleted successfully',
       })
       setDeleteDialogOpen(false)
       onOpenChange(false)
@@ -171,7 +193,7 @@ export function EditContentTypeModal({
       const e = err as { message?: string }
       toast({
         title: 'Error',
-        description: e.message || 'Failed to delete data model',
+        description: e.message || 'Failed to delete content model',
         variant: 'destructive',
       })
     } finally {
@@ -388,10 +410,10 @@ export function EditContentTypeModal({
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Data Model</AlertDialogTitle>
+              <AlertDialogTitle>Delete Content Model</AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete "{contentType.name}"? This action cannot be undone.
-                Make sure there are no content entries using this data model.
+                Make sure there are no content entries using this content model.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

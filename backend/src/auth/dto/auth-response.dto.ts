@@ -27,11 +27,18 @@ export class UserResponseDto {
   roles?: string[];
 
   @ApiPropertyOptional({
-    description: 'Tenant ID (RETURNED in response only - NOT required for login). This is informational metadata indicating which tenant the user belongs to. null for Super Admin, tenant UUID for tenant users. Login only requires email and password.',
+    description: 'Tenant ID (RETURNED in response only - NOT required for login). null for Super Admin, tenant UUID for tenant users.',
     example: '123e4567-e89b-12d3-a456-426614174000',
     nullable: true,
   })
   tenantId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tenant slug for URL (e.g. my-org). Use for tenant-scoped routes: /[tenantSlug]/projects.',
+    example: 'my-org',
+    nullable: true,
+  })
+  tenantSlug?: string | null;
 }
 
 export class AuthResponseDto {
@@ -68,11 +75,18 @@ export class UserMeResponseDto {
   email: string;
 
   @ApiPropertyOptional({
-    description: 'Tenant ID (RETURNED in response only - NOT required for login). null for Super Admin, tenant UUID for tenant users.',
+    description: 'Tenant ID. null for Super Admin, tenant UUID for tenant users.',
     example: '123e4567-e89b-12d3-a456-426614174000',
     nullable: true,
   })
   tenantId: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tenant slug for URL (e.g. my-org). Use for routes: /[tenantSlug]/projects.',
+    example: 'my-org',
+    nullable: true,
+  })
+  tenantSlug?: string | null;
 
   @ApiPropertyOptional({
     description: 'User roles',

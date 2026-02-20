@@ -43,11 +43,17 @@ import {
   GripVertical,
   ChevronDown,
   ChevronRight,
+  SlidersHorizontal,
 } from 'lucide-react'
-import { contentTypesApi, ContentType, ContentTypeField } from '@/lib/api/content-types'
+import { contentTypesApi, ContentType, ContentTypeField, CreateFieldDto } from '@/lib/api/content-types'
+import { collectionsApi, Collection, CollectionField, CreateCollectionFieldDto } from '@/lib/api/collections'
+import { formElementsApi, FormElement } from '@/lib/api/form-elements'
 import { useToast } from '@/lib/hooks/use-toast'
 import { useProject } from '@/contexts/project-context'
 import { AddFieldModal } from './add-field-modal'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { EditFieldModal } from './edit-field-modal'
 import { EditContentTypeModal } from './edit-content-type-modal'
 import { getFieldTypeConfig } from './field-type-icons'
@@ -55,16 +61,18 @@ import { getFieldTypeConfig } from './field-type-icons'
 interface DataModelViewProps {
   contentTypeId: string
   onRefresh?: () => void
+  useV2?: boolean
+  projectId?: string
 }
 
 interface SortableFieldItemProps {
-  field: ContentTypeField
+  field: ContentTypeField | CollectionField
   onEdit: () => void
   onDelete: () => void
   isExpanded?: boolean
   onToggleExpand?: () => void
-  nestedFields?: ContentTypeField[]
-  contentTypes?: ContentType[] // For mapping schema IDs to names
+  nestedFields?: (ContentTypeField | CollectionField)[]
+  contentTypes?: (ContentType | Collection)[]
 }
 
 function SortableFieldItem({ 
@@ -91,8 +99,7 @@ function SortableFieldItem({
     opacity: isDragging ? 0.5 : 1,
   }
 
-  // Determine field type based on interface or type
-  const fieldInterface = (field.interface || '').toLowerCase()
+  const fieldInterface = (('interface' in field ? field.interface : '') || '').toLowerCase()
   const fieldType = (field.type || '').toLowerCase()
   
   // Check if it's a schema field (interface can be 'schema' or 'schema-selector', or type can be 'schema')
@@ -116,19 +123,23 @@ function SortableFieldItem({
   const IconComponent = fieldConfig.icon
   const hasNestedFields = nestedFields && nestedFields.length > 0
   
-  // Get schema-specific info from options
-  const schemaInfo = isSchema && field.options ? {
-    displayName: field.options.schemaDisplayName || field.options.displayName || '',
-    icon: field.options.schemaIcon || field.options.icon || 'Database',
-    repeatable: field.options.schemaRepeatable || field.options.repeatable || false,
-    schemaId: field.options.schemaId || field.options.id || '',
+  // ContentTypeField has required; CollectionField has is_required
+  const isRequired = 'required' in field ? field.required : field.is_required
+
+  // Get schema-specific info from options (ContentTypeField has options; CollectionField does not)
+  const fieldOptions = 'options' in field ? field.options : undefined
+  const schemaInfo = isSchema && fieldOptions ? {
+    displayName: fieldOptions.schemaDisplayName || fieldOptions.displayName || '',
+    icon: fieldOptions.schemaIcon || fieldOptions.icon || 'Database',
+    repeatable: fieldOptions.schemaRepeatable || fieldOptions.repeatable || false,
+    schemaId: fieldOptions.schemaId || fieldOptions.id || '',
   } : null
-  
+
   // Get dynamic zone-specific info from options
-  const dynamicZoneInfo = isDynamicZone && field.options ? {
-    allowedSchemas: Array.isArray(field.options.allowed_schemas) 
-      ? field.options.allowed_schemas 
-      : (Array.isArray(field.options.allowedSchemas) ? field.options.allowedSchemas : []),
+  const dynamicZoneInfo = isDynamicZone && fieldOptions ? {
+    allowedSchemas: Array.isArray(fieldOptions.allowed_schemas)
+      ? fieldOptions.allowed_schemas
+      : (Array.isArray(fieldOptions.allowedSchemas) ? fieldOptions.allowedSchemas : []),
   } : null
 
   return (
@@ -201,7 +212,7 @@ function SortableFieldItem({
                   ({dynamicZoneInfo.allowedSchemas.length} {dynamicZoneInfo.allowedSchemas.length === 1 ? 'schema' : 'schemas'})
                 </span>
               )}
-              {field.required && (
+              {isRequired && (
                 <span className="text-destructive ml-1">*</span>
               )}
             </span>
@@ -257,7 +268,7 @@ function SortableFieldItem({
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">
                     {nestedField.field}
-                    {nestedField.required && (
+                    {('required' in nestedField ? nestedField.required : nestedField.is_required) && (
                       <span className="text-destructive ml-1">*</span>
                     )}
                   </span>
@@ -330,7 +341,7 @@ function SortableFieldItem({
               <p className="text-xs text-muted-foreground">No schemas selected</p>
             ) : (
               <div className="space-y-1">
-                {dynamicZoneInfo.allowedSchemas.map((schemaId) => {
+                {dynamicZoneInfo.allowedSchemas.map((schemaId: string) => {
                   const dataModel = contentTypes.find(ct => ct.id === schemaId)
                   return (
                     <div
@@ -353,23 +364,31 @@ function SortableFieldItem({
   )
 }
 
-export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) {
+export function DataModelView({ contentTypeId, onRefresh, useV2 = false, projectId: projectIdProp }: DataModelViewProps) {
   const { toast } = useToast()
   const { currentProject } = useProject()
-  const [contentType, setContentType] = useState<ContentType | null>(null)
+  const projectId = projectIdProp ?? currentProject?.id
+  const [contentType, setContentType] = useState<ContentType | Collection | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [addFieldModalOpen, setAddFieldModalOpen] = useState(false)
   const [editFieldModalOpen, setEditFieldModalOpen] = useState(false)
-  const [editingField, setEditingField] = useState<ContentTypeField | null>(null)
+  const [editingField, setEditingField] = useState<ContentTypeField | CollectionField | null>(null)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [deleteFieldDialogOpen, setDeleteFieldDialogOpen] = useState(false)
-  const [fieldToDelete, setFieldToDelete] = useState<ContentTypeField | null>(null)
-  const [fields, setFields] = useState<ContentTypeField[]>([])
+  const [fieldToDelete, setFieldToDelete] = useState<ContentTypeField | CollectionField | null>(null)
+  const [deleteContentTypeDialogOpen, setDeleteContentTypeDialogOpen] = useState(false)
+  const [deletingContentType, setDeletingContentType] = useState(false)
+  const [fields, setFields] = useState<(ContentTypeField | CollectionField)[]>([])
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [saving, setSaving] = useState(false)
   const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set())
-  const [allContentTypes, setAllContentTypes] = useState<ContentType[]>([]) // For mapping schema IDs
+  const [allContentTypes, setAllContentTypes] = useState<(ContentType | Collection)[]>([])
+  const [formElements, setFormElements] = useState<FormElement[]>([])
+  const [addFieldName, setAddFieldName] = useState('')
+  const [addFieldTypeKey, setAddFieldTypeKey] = useState<string>('')
+  const [addFieldRequired, setAddFieldRequired] = useState(false)
+  const [addFieldSaving, setAddFieldSaving] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -378,27 +397,48 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
     })
   )
 
+  const loadFormElements = async () => {
+    const pid = projectId ?? currentProject?.id
+    if (!pid) return
+    try {
+      const data = await formElementsApi.getAll(pid)
+      setFormElements(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to load form elements:', err)
+      setFormElements([])
+    }
+  }
+
   useEffect(() => {
     if (contentTypeId) {
       loadContentType()
       loadAllContentTypes()
+      loadFormElements()
     }
   }, [contentTypeId])
+
+  useEffect(() => {
+    if (formElements.length > 0 && !addFieldTypeKey) {
+      setAddFieldTypeKey(formElements[0].key)
+    }
+  }, [formElements, addFieldTypeKey])
 
   const loadContentType = async () => {
     try {
       setLoading(true)
       setError(null)
-      const data = await contentTypesApi.getById(contentTypeId)
+      const data = useV2
+        ? await collectionsApi.getById(contentTypeId)
+        : await contentTypesApi.getById(contentTypeId)
       setContentType(data)
       setFields(data.fields || [])
       setHasUnsavedChanges(false)
     } catch (err: unknown) {
       const e = err as { message?: string }
-      setError(e.message || 'Failed to load data model')
+      setError(e.message || 'Failed to load content model')
       toast({
         title: 'Error',
-        description: e.message || 'Failed to load data model',
+        description: e.message || 'Failed to load content model',
         variant: 'destructive',
       })
     } finally {
@@ -407,12 +447,12 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
   }
 
   const loadAllContentTypes = async () => {
-    if (!currentProject) return
+    const pid = projectId ?? currentProject?.id
+    if (!pid) return
     try {
-      const data = await contentTypesApi.getAll(currentProject.id)
+      const data = useV2 ? await collectionsApi.getAll(pid) : await contentTypesApi.getAll(pid)
       setAllContentTypes(data || [])
     } catch (err: unknown) {
-      // Silently fail - this is just for display purposes
       console.error('Failed to load content types for mapping:', err)
     }
   }
@@ -440,27 +480,25 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
 
   const handleSaveOrder = async () => {
     if (!contentType) return
-
     try {
       setSaving(true)
-      await contentTypesApi.updateFieldOrder(
-        contentType.id,
-        fields.map(f => ({ id: f.id, sort: f.sort || 0 }))
-      )
-      
-      toast({
-        title: 'Success',
-        description: 'Field order saved successfully',
-      })
+      if (useV2) {
+        await collectionsApi.updateFieldOrder(
+          contentType.id,
+          fields.map((f, index) => ({ id: f.id, sort: index }))
+        )
+      } else {
+        await contentTypesApi.updateFieldOrder(
+          contentType.id,
+          fields.map((f, index) => ({ id: f.id, sort: ('sort' in f ? f.sort : 0) ?? index }))
+        )
+      }
+      toast({ title: 'Success', description: 'Field order saved successfully' })
       setHasUnsavedChanges(false)
       await loadContentType()
     } catch (err: unknown) {
       const e = err as { message?: string }
-      toast({
-        title: 'Error',
-        description: e.message || 'Failed to save field order',
-        variant: 'destructive',
-      })
+      toast({ title: 'Error', description: e.message || 'Failed to save field order', variant: 'destructive' })
     } finally {
       setSaving(false)
     }
@@ -468,6 +506,51 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
 
   const handleAddField = () => {
     setAddFieldModalOpen(true)
+  }
+
+  const handleQuickAddField = async () => {
+    const name = addFieldName.trim().replace(/\s+/g, '_').toLowerCase() || addFieldName.trim()
+    if (!name) {
+      toast({ title: 'Field name required', variant: 'destructive' })
+      return
+    }
+    const fe = formElements.find((e) => e.key === addFieldTypeKey)
+    if (!fe || !contentType) {
+      toast({ title: 'Select a field type', variant: 'destructive' })
+      return
+    }
+    setAddFieldSaving(true)
+    try {
+      const interfaceConfig = fe.interface?.component ? fe.interface : { component: fe.key }
+      if (useV2) {
+        const dto: CreateCollectionFieldDto = {
+          name: name,
+          type: fe.type,
+          is_required: addFieldRequired,
+          config: { ...fe.default_settings },
+        }
+        await collectionsApi.addField(contentType.id, dto)
+      } else {
+        const fieldDto: CreateFieldDto = {
+          field: name,
+          type: fe.type,
+          interface: interfaceConfig?.component ?? fe.key,
+          options: { ...fe.default_settings },
+          validation: { ...fe.validation_rules, required: addFieldRequired },
+          required: addFieldRequired,
+        }
+        await contentTypesApi.addField(contentType.id, fieldDto)
+      }
+      toast({ title: 'Field added' })
+      setAddFieldName('')
+      await loadContentType()
+      if (onRefresh) onRefresh()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({ title: 'Error', description: e.message || 'Failed to add field', variant: 'destructive' })
+    } finally {
+      setAddFieldSaving(false)
+    }
   }
 
   const handleFieldAdded = () => {
@@ -491,7 +574,34 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
     }
   }
 
-  const handleEditField = (field: ContentTypeField) => {
+  const handleConfirmDeleteContentType = async () => {
+    if (!contentType) return
+    try {
+      setDeletingContentType(true)
+      if (useV2) {
+        await collectionsApi.delete(contentType.id)
+      } else {
+        await contentTypesApi.delete(contentType.id)
+      }
+      toast({
+        title: 'Success',
+        description: 'Content model deleted successfully',
+      })
+      setDeleteContentTypeDialogOpen(false)
+      handleDeleteSuccess()
+    } catch (err: unknown) {
+      const e = err as { message?: string }
+      toast({
+        title: 'Error',
+        description: e.message || 'Failed to delete content model',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeletingContentType(false)
+    }
+  }
+
+  const handleEditField = (field: ContentTypeField | CollectionField) => {
     setEditingField(field)
     setEditFieldModalOpen(true)
   }
@@ -505,7 +615,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
     }
   }
 
-  const handleDeleteField = (field: ContentTypeField) => {
+  const handleDeleteField = (field: ContentTypeField | CollectionField) => {
     setFieldToDelete(field)
     setDeleteFieldDialogOpen(true)
   }
@@ -515,7 +625,11 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
 
     try {
       setSaving(true)
-      await contentTypesApi.deleteField(contentType.id, fieldToDelete.id)
+      if (useV2) {
+        await collectionsApi.deleteField(contentType.id, fieldToDelete.id)
+      } else {
+        await contentTypesApi.deleteField(contentType.id, fieldToDelete.id)
+      }
       toast({
         title: 'Success',
         description: 'Field deleted successfully',
@@ -542,7 +656,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">Loading data model...</span>
+        <span className="ml-2 text-muted-foreground">Loading content model...</span>
       </div>
     )
   }
@@ -553,7 +667,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            {error || 'Data model not found'}
+            {error || 'Content model not found'}
           </AlertDescription>
         </Alert>
       </div>
@@ -568,7 +682,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-semibold">{contentType.name}</h2>
-              {contentType.is_system && (
+              {'is_system' in contentType && contentType.is_system && (
                 <Badge variant="outline">System</Badge>
               )}
             </div>
@@ -576,10 +690,10 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
               <code className="text-xs bg-muted px-2 py-1 rounded">
                 {contentType.collection}
               </code>
-              {contentType.singleton && (
+              {'singleton' in contentType && contentType.singleton && (
                 <Badge variant="secondary">Singleton</Badge>
               )}
-              {contentType.hidden && (
+              {'hidden' in contentType && contentType.hidden && (
                 <Badge variant="secondary" className="gap-1">
                   <EyeOff className="h-3 w-3" />
                   Hidden
@@ -593,13 +707,9 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
             )} */}
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setEditModalOpen(true)}
-              disabled={contentType.is_system}
-            >
-              <Edit className="h-4 w-4 mr-2" />
-              Edit
+            <Button variant="outline" onClick={handleAddField}>
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              Full options…
             </Button>
             {hasUnsavedChanges && (
               <Button
@@ -611,25 +721,82 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             )}
-            <Button onClick={handleAddField}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add new field
+            <Button
+              variant="outline"
+              onClick={() => setEditModalOpen(true)}
+              disabled={'is_system' in contentType && contentType.is_system}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteContentTypeDialogOpen(true)}
+              disabled={'is_system' in contentType && contentType.is_system}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
             </Button>
           </div>
+        </div>
+
+        {/* Inline form builder: add field in one click */}
+        <div className="border rounded-lg bg-muted/30 p-4 mb-6">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[140px]">
+              <Label className="text-xs text-muted-foreground">Field type</Label>
+              <select
+                value={addFieldTypeKey}
+                onChange={(e) => setAddFieldTypeKey(e.target.value)}
+                className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+              >
+                {formElements.length === 0 && (
+                  <option value="">Loading…</option>
+                )}
+                {formElements.map((fe) => (
+                  <option key={fe.id} value={fe.key}>
+                    {fe.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <Label className="text-xs text-muted-foreground">Field name (API key)</Label>
+              <Input
+                placeholder="e.g. title, body, published_at"
+                value={addFieldName}
+                onChange={(e) => setAddFieldName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleQuickAddField()}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex items-center gap-2 h-9 mt-6">
+              <Checkbox
+                id="quick-add-required"
+                checked={addFieldRequired}
+                onCheckedChange={(v) => setAddFieldRequired(!!v)}
+              />
+              <Label htmlFor="quick-add-required" className="text-sm font-normal cursor-pointer">Required</Label>
+            </div>
+            <Button onClick={handleQuickAddField} disabled={addFieldSaving || !addFieldName.trim()}>
+              {addFieldSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              <span className="ml-2">Add field</span>
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Choose type, enter a name, then click Add. Drag rows to reorder; use Edit on a field for more options.
+          </p>
         </div>
 
         {/* Fields List */}
         {fields.length === 0 ? (
           <div className="border rounded-lg p-12 text-center">
             <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No fields</h3>
+            <h3 className="text-lg font-semibold mb-2">No fields yet</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Add your first field to this data model
+              Use the form above to add your first field in one click
             </p>
-            <Button onClick={handleAddField}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add new field
-            </Button>
           </div>
         ) : (
           <div className="border rounded-lg bg-white">
@@ -647,10 +814,10 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
                   // For now, we'll check if options contains component fields
                   const nestedFields: ContentTypeField[] = []
                   const fieldType = (field.type || '').toLowerCase()
-                  const fieldInterface = (field.interface || '').toLowerCase()
+                  const fieldInterface = (('interface' in field ? field.interface : '') || '').toLowerCase()
                   
-                  if (fieldType === 'component' && field.options?.fields) {
-                    // If component has nested fields in options
+                  if (fieldType === 'component' && 'options' in field && field.options?.fields) {
+                    // If component has nested fields in options (ContentTypeField only)
                     nestedFields.push(...(field.options.fields as ContentTypeField[]))
                   }
                   
@@ -687,17 +854,8 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
               </SortableContext>
             </DndContext>
 
-            {/* Add Field Button at Bottom */}
-            <div className="px-4 py-3 border-t border-gray-100">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleAddField}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add another field
-              </Button>
+            <div className="px-4 py-3 border-t border-gray-100 text-sm text-muted-foreground">
+              Add more fields using the form builder above, or drag to reorder.
             </div>
           </div>
         )}
@@ -709,6 +867,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
           contentTypeId={contentType.id}
           contentTypeName={contentType.name}
           onSuccess={handleFieldAdded}
+          useV2={useV2}
         />
 
         {/* Edit Field Modal */}
@@ -720,6 +879,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
             contentTypeName={contentType.name}
             field={editingField}
             onSuccess={handleEditFieldSuccess}
+            useV2={useV2}
           />
         )}
 
@@ -727,11 +887,44 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
         <EditContentTypeModal
           open={editModalOpen}
           onOpenChange={setEditModalOpen}
-          contentType={contentType}
+          contentType={contentType as ContentType & { slug?: string; config?: Record<string, unknown> }}
           onSuccess={handleEditSuccess}
           onDelete={handleDeleteSuccess}
           showDeleteButton={true}
+          useV2={useV2}
         />
+
+        {/* Delete Content Model Confirmation Dialog */}
+        <AlertDialog open={deleteContentTypeDialogOpen} onOpenChange={setDeleteContentTypeDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Content Model</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete &quot;{contentType?.name}&quot;? This action cannot be undone.
+                Make sure there are no content entries using this content model.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deletingContentType} onClick={() => setDeleteContentTypeDialogOpen(false)}>
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmDeleteContentType}
+                disabled={deletingContentType}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deletingContentType ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* Delete Field Confirmation Dialog */}
         <AlertDialog open={deleteFieldDialogOpen} onOpenChange={setDeleteFieldDialogOpen}>
@@ -739,7 +932,7 @@ export function DataModelView({ contentTypeId, onRefresh }: DataModelViewProps) 
             <AlertDialogHeader>
               <AlertDialogTitle>Delete Field</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to delete the field "{fieldToDelete?.field}"? This action cannot be undone.
+                Are you sure you want to delete the field "{fieldToDelete ? ('name' in fieldToDelete ? fieldToDelete.name : fieldToDelete.field) : ''}"? This action cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

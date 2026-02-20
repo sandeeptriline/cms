@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
+import { Breadcrumb } from './breadcrumb'
 import { RightSidebar } from './right-sidebar'
 
 export interface SecondarySidebarItem {
@@ -40,6 +41,8 @@ interface DashboardLayoutProps {
   showSecondarySidebar?: boolean
   /** Callback when a sidebar item is clicked (for React state-based routing) */
   onSidebarItemClick?: (item: SecondarySidebarItem) => void
+  /** Hide breadcrumb bar (e.g. for project list landing) */
+  hideBreadcrumb?: boolean
 }
 
 export function DashboardLayout({ 
@@ -53,32 +56,25 @@ export function DashboardLayout({
   secondarySidebarItems = [],
   showSecondarySidebar = true,
   onSidebarItemClick,
+  hideBreadcrumb = false,
 }: DashboardLayoutProps) {
   const pathname = usePathname()
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
-  
-  // Determine if we're on a section that should show secondary sidebar (Directus behavior)
-  // Secondary sidebar should be visible for all main sections
-  const shouldShowSecondarySidebar = pathname?.startsWith(basePath) && 
-                                     (pathname?.includes('/settings') || 
-                                      pathname?.includes('/files') ||
-                                      pathname?.includes('/explore') ||
-                                      pathname?.includes('/insights') ||
-                                      pathname?.includes('/documentation') ||
-                                      pathname?.includes('/users') ||
-                                      pathname?.includes('/extensions') ||
-                                      pathname === basePath ||
-                                      pathname?.startsWith(basePath + '/'))
-  
+
+  // On projects page (e.g. /dashboard/projects or /[tenantSlug]/projects), hide the sub left menu
+  const isProjectsPage =
+    pathname === '/dashboard/projects' ||
+    (typeof pathname === 'string' && /^\/[^/]+\/projects\/?$/.test(pathname))
+  const effectiveShowSecondarySidebar = showSecondarySidebar && !isProjectsPage
+
   // Auto-expand sidebar by default (Directus behavior - sidebar is always visible)
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false)
 
-  // Auto-expand sidebar when navigating to any section (Directus behavior)
   useEffect(() => {
-    if (shouldShowSecondarySidebar) {
+    if (effectiveShowSecondarySidebar) {
       setLeftSidebarCollapsed(false)
     }
-  }, [shouldShowSecondarySidebar, pathname])
+  }, [effectiveShowSecondarySidebar, pathname])
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -88,14 +84,14 @@ export function DashboardLayout({
         onToggle={() => setLeftSidebarCollapsed(!leftSidebarCollapsed)}
         basePath={basePath}
         secondarySidebarItems={secondarySidebarItems}
-        showSecondarySidebar={showSecondarySidebar}
+        showSecondarySidebar={effectiveShowSecondarySidebar}
         onSidebarItemClick={onSidebarItemClick}
       />
 
-      {/* Main Content Area - Adjusted for fixed sidebar */}
+      {/* Main Content Area - Adjusted for fixed sidebar (52px when sub menu hidden on projects page) */}
       <div className={cn(
         'flex flex-1 flex-col overflow-hidden transition-all duration-300',
-        leftSidebarCollapsed ? 'ml-[52px]' : 'ml-[272px]'
+        leftSidebarCollapsed || isProjectsPage ? 'ml-[52px]' : 'ml-[272px]'
       )}>
         {/* Header */}
         <Header 
@@ -106,7 +102,15 @@ export function DashboardLayout({
           icon={icon}
           onToggleRightSidebar={() => setRightSidebarOpen(!rightSidebarOpen)}
           rightSidebarOpen={rightSidebarOpen}
+          showTenantTopNav={basePath === '/dashboard'}
         />
+
+        {/* Breadcrumb - below header */}
+        {!hideBreadcrumb && (
+          <div className="border-b border-border bg-muted/30 px-6 py-2">
+            <Breadcrumb className="text-sm" />
+          </div>
+        )}
 
         {/* Main Content with Right Sidebar */}
         <div className="flex flex-1 overflow-hidden relative">

@@ -43,10 +43,10 @@ export function isAdmin(roles?: string[]): boolean {
 /**
  * Check if user has any of the specified roles
  */
-export function hasRole(userRoles?: string[], requiredRoles: string[]): boolean {
+export function hasRole(requiredRoles: string[], userRoles?: string[]): boolean {
   if (!userRoles || userRoles.length === 0) return false
-  return requiredRoles.some(requiredRole => 
-    userRoles.some(userRole => 
+  return requiredRoles.some(requiredRole =>
+    userRoles.some(userRole =>
       userRole.toLowerCase() === requiredRole.toLowerCase()
     )
   )

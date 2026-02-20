@@ -11,6 +11,14 @@ export interface RegisterDto {
   name?: string
 }
 
+export interface RegisterTenantDto {
+  name: string
+  slug: string
+  email: string
+  password: string
+  adminName?: string
+}
+
 export interface AuthResponse {
   accessToken: string
   refreshToken: string
@@ -19,7 +27,8 @@ export interface AuthResponse {
     email: string
     name?: string
     roles?: string[]
-    tenantId?: string | null // Can be null for Super Admin
+    tenantId?: string | null
+    tenantSlug?: string | null
   }
 }
 
@@ -27,7 +36,8 @@ export interface User {
   id: string
   email: string
   name?: string
-  tenantId: string | null // Can be null for Super Admin
+  tenantId: string | null
+  tenantSlug?: string | null
   roles?: string[]
 }
 
@@ -70,6 +80,15 @@ export const authApi = {
         'X-Tenant-ID': tenantId,
       },
     })
+    return response.data
+  },
+
+  /**
+   * Self-signup: create a new tenant (organization) and admin account. Free plan by default.
+   * No tenant ID required.
+   */
+  async registerTenant(data: RegisterTenantDto): Promise<AuthResponse> {
+    const response = await apiClient.post<AuthResponse>('/auth/register-tenant', data)
     return response.data
   },
 
